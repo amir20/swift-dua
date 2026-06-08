@@ -1,0 +1,14 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Build artifacts produced by make-app.sh
+ProgressApp.app/
+
+# Xcode
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+
+# macOS
+.DS_Store
