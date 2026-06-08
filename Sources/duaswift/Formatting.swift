@@ -7,7 +7,7 @@ enum ByteFormat: String, ExpressibleByArgument {
     case bytes
 }
 
-// MARK: - Progress display helpers
+// MARK: - Output formatting helpers
 
 /// Inserts thousands separators: 1234567 -> "1,234,567".
 func grouped(_ n: Int) -> String {
