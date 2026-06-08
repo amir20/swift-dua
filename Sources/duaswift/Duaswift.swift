@@ -22,7 +22,7 @@ struct Duaswift: ParsableCommand {
 
     @Option(name: [.short, .long],
             help: "Worker threads (default: logical CPU count).")
-    var threads = ProcessInfo.processInfo.activeProcessorCount
+    var threads: Int?
 
     @Option(name: [.short, .long],
             help: "Byte format: metric or bytes.")
@@ -36,7 +36,7 @@ struct Duaswift: ParsableCommand {
     var paths: [String] = []
 
     func run() throws {
-        let threadCount = max(1, threads)
+        let threadCount = max(1, threads ?? ProcessInfo.processInfo.activeProcessorCount)
 
         var inputs = paths
         if inputs.isEmpty {
