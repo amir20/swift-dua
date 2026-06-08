@@ -1,28 +1,29 @@
 import Foundation
+import Synchronization
 #if canImport(Darwin)
 import Darwin
 #endif
 
 /// Thread-safe running totals updated by scanner workers (once per directory)
 /// and read by the progress monitor.
-final class ProgressCounter {
-    private let lock = NSLock()
-    private var files = 0
-    private var bytes: Int64 = 0
-    private var current = ""
+final class ProgressCounter: Sendable {
+    private struct State {
+        var files = 0
+        var bytes: Int64 = 0
+        var current = ""
+    }
+    private let state = Mutex(State())
 
     func update(files deltaFiles: Int, bytes deltaBytes: Int64, current path: String) {
-        lock.lock()
-        files += deltaFiles
-        bytes += deltaBytes
-        current = path
-        lock.unlock()
+        state.withLock {
+            $0.files += deltaFiles
+            $0.bytes += deltaBytes
+            $0.current = path
+        }
     }
 
     func snapshot() -> (files: Int, bytes: Int64, current: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        return (files, bytes, current)
+        state.withLock { ($0.files, $0.bytes, $0.current) }
     }
 }
 
