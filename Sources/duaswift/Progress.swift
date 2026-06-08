@@ -80,22 +80,3 @@ final class ProgressMonitor {
     }
 }
 
-// MARK: - Small formatting helpers
-
-func grouped(_ n: Int) -> String {
-    let digits = String(n)
-    guard n >= 1000 else { return digits }
-    var out = ""
-    var count = 0
-    for ch in digits.reversed() {
-        if count != 0 && count % 3 == 0 { out.append(",") }
-        out.append(ch)
-        count += 1
-    }
-    return String(out.reversed())
-}
-
-func truncatePath(_ path: String, max: Int = 44) -> String {
-    guard path.count > max else { return path }
-    return "…" + path.suffix(max - 1)
-}

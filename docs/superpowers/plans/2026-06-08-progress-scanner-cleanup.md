@@ -37,8 +37,8 @@
 - [ ] **Step 1: Rewrite `Package.swift`**
 
 ```swift
-// swift-tools-version:6.0
-import PackageDescription
+// swift-tools-version:6.2
+import PackageDescription   // 6.2 (not 6.0): .macOS(.v26) requires PackageDescription 6.2
 
 let package = Package(
     name: "ProgressApp",
@@ -156,28 +156,35 @@ final class DiskScannerTests: XCTestCase {
         try Data(count: bytes).write(to: url)
     }
 
-    /// Adding one file of known size raises the apparent total by exactly that
-    /// size when the surrounding directory structure is otherwise identical.
+    /// The scanner descends into sub-directories and sums regular-file apparent
+    /// sizes. Two trees with identical structure (same entry names) where only
+    /// one file's *size* differs differ in apparent total by exactly that
+    /// difference — the directory inode sizes are identical because the entries
+    /// match, so they cancel. (Adding/removing a file would instead perturb the
+    /// containing directory's own st_size, e.g. +32 bytes on APFS.)
     func testApparentSizeAggregatesNestedFiles() throws {
         let base = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: base) }
 
-        // Tree A: root/sub/ (empty)
+        // Tree A: root/sub/data.bin (4096 bytes)
         let treeA = base.appendingPathComponent("a")
         try FileManager.default.createDirectory(at: treeA.appendingPathComponent("sub"),
                                                 withIntermediateDirectories: true)
-        // Tree B: identical, plus root/sub/b.bin (4096 bytes)
+        try writeFile(treeA.appendingPathComponent("sub/data.bin"), bytes: 4096)
+
+        // Tree B: identical names, but data.bin is 8192 bytes.
         let treeB = base.appendingPathComponent("b")
         try FileManager.default.createDirectory(at: treeB.appendingPathComponent("sub"),
                                                 withIntermediateDirectories: true)
-        try writeFile(treeB.appendingPathComponent("sub/b.bin"), bytes: 4096)
+        try writeFile(treeB.appendingPathComponent("sub/data.bin"), bytes: 8192)
 
         let scanner = DiskScanner(apparent: true, countHardLinks: false, threadCount: 4)
         let a = scanner.scan(treeA.path)
         let b = scanner.scan(treeB.path)
 
-        XCTAssertEqual(b.size - a.size, 4096, "extra 4096-byte file should add exactly 4096 apparent bytes")
-        XCTAssertEqual(b.entries - a.entries, 1, "extra file should add exactly one entry")
+        XCTAssertEqual(b.size - a.size, 4096, "a file 4096 bytes larger should raise the apparent total by exactly 4096")
+        XCTAssertEqual(a.entries, 3, "root dir + sub dir + data.bin = 3 entries (proves nested descent)")
+        XCTAssertEqual(b.entries, 3)
     }
 
     /// With a hard link present, counting links adds the file's size a second
@@ -349,7 +356,14 @@ In `Sources/duaswift/Progress.swift`, delete the entire `// MARK: - Small format
 
 In `Sources/duaswift/main.swift`, delete `formatMetric(_:)`, `renderSize(_:)`, and `leftPad(_:to:)` (the `// MARK: - Formatting` section, lines 59–78 of the original). They now live in `Formatting.swift`. (The call site in the print loop still references the old `renderSize(_:)`; it is rewritten in Task 5 when `main.swift` becomes the command.)
 
-> Note: `main.swift` will not compile between this step and Task 5 because its body still calls the old global-`format` `renderSize`. That is fine for unit tests (which don't build the executable's top-level code the same way), but to keep `swift build` green, do Task 5 immediately after this task. If you want a green checkpoint here, run only `swift test --filter FormattingTests` (below) and defer `swift build` to Task 5.
+> **Execution note (revised):** Removing the old `renderSize(_:)` breaks the
+> `duaswift` module, and because the test target `@testable import`s that
+> module, the test target can't build either until Task 4 rewrites `main.swift`.
+> Therefore **Tasks 3 and 4 are executed together as one unit** with a single
+> green build/test endpoint. The separate "run only FormattingTests" checkpoint
+> originally suggested here does not work and is superseded. The two commits
+> below may be collapsed into the Task 4 commit to avoid a broken intermediate
+> commit.
 
 - [ ] **Step 6: Run formatting tests**
 
@@ -937,7 +951,7 @@ git commit -m "refactor: DiskScanner uses DirectoryQueue and Mutex inode set"
 
 - [ ] **Step 1: Remove the staged Swift 5 mode from both targets**
 
-In `Package.swift`, delete the `swiftSettings: [.swiftLanguageMode(.v5)]` lines from **both** the `duaswift` executable target and the `duaswiftTests` test target (and the now-trailing comma / comment). With `swift-tools-version:6.0`, targets default to Swift 6 language mode, so strict data-race checking is now on.
+In `Package.swift`, delete the `swiftSettings: [.swiftLanguageMode(.v5)]` lines from **both** the `duaswift` executable target and the `duaswiftTests` test target (and the now-trailing comma / comment). With `swift-tools-version:6.2`, targets default to Swift 6 language mode, so strict data-race checking is now on.
 
 The `duaswift` target becomes:
 
