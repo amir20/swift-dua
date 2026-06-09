@@ -46,7 +46,7 @@ struct RailView: View {
         let isExp = model.mode == .type && model.expanded == seg.category
         return HStack(spacing: 11) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Palette.color(seg.category))
+                .fill(seg.color)
                 .frame(width: 11, height: 11)
             VStack(alignment: .leading, spacing: 1) {
                 Text(seg.label)
@@ -100,7 +100,7 @@ struct RailView: View {
                 let loc = locs[i]
                 HStack(spacing: 9) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Palette.color(seg.category))
+                        .fill(seg.color)
                         .frame(width: 6, height: 6)
                     Text(model.fullPath(loc.node))
                         .font(.system(size: 11.5, design: .monospaced))

@@ -11,6 +11,15 @@ struct Segment: Identifiable {
     let node: DirNode?      // folder lens: the directory this slice represents
     let isType: Bool
     let drillable: Bool
+    /// The slice/swatch color: a distinct per-folder hue in the folder lens, the
+    /// semantic category color in the type lens. Resolved once at build time so
+    /// the donut and rail always agree.
+    let color: Color
+
+    func recolored(_ c: Color) -> Segment {
+        Segment(id: id, label: label, category: category, size: size, recl: recl,
+                node: node, isType: isType, drillable: drillable, color: c)
+    }
 }
 
 /// A `Segment` placed on the ring (angles in radians, 12 o'clock = -π/2).
@@ -39,6 +48,9 @@ final class ScanModel {
     /// Live counters polled from the scanner while a scan is in flight.
     var liveFiles = 0
     var liveBytes: Int64 = 0
+    /// Whether the scanning activity ring is shown. Gated behind a short delay so
+    /// a fast scan never flashes it.
+    var showRing = false
 
     var current: DirNode? { path.last }
 
@@ -50,6 +62,9 @@ final class ScanModel {
     private var liveChildren: [DirNode] = []
     private var progress: ScanProgress?
     private var pollTimer: Timer?
+    /// Fires once, 0.3s into a scan, to reveal the progress ring. Invalidated if
+    /// the scan finishes first, so quick scans never show it.
+    private var ringDelayTimer: Timer?
 
     // MARK: - Loading
 
@@ -59,8 +74,16 @@ final class ScanModel {
         scanning = true
         scanError = nil
         liveFiles = 0; liveBytes = 0
+        showRing = false
         let prog = ScanProgress()
         progress = prog
+        ringDelayTimer?.invalidate()
+        ringDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.scanning else { return }
+                withAnimation(.easeOut(duration: 0.25)) { self.showRing = true }
+            }
+        }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -105,11 +128,14 @@ final class ScanModel {
 
     private func finishScan() {
         pollTimer?.invalidate(); pollTimer = nil
+        ringDelayTimer?.invalidate(); ringDelayTimer = nil
         if path.count == 1, let rebuilt = rebuildRoot() {
             root = rebuilt
             path = [rebuilt]
         }
         scanning = false
+        // Fade the activity ring out as the real wedges take over.
+        withAnimation(.easeOut(duration: 0.4)) { showRing = false }
         refresh()
         sweepKey += 1
     }
@@ -181,22 +207,27 @@ final class ScanModel {
             var segs = cur.children.filter { $0.size > 0 }.map { c in
                 Segment(id: Self.nid(c), label: c.name, category: c.category,
                         size: c.size, recl: Derive.reclaimBytes(c),
-                        node: c, isType: false, drillable: !c.children.isEmpty)
+                        node: c, isType: false, drillable: !c.children.isEmpty, color: .clear)
             }
             let loose = cur.fileBytes.values.reduce(0, +)
             if loose > 0 {
                 let cat = cur.fileBytes.max { $0.value < $1.value }!.key
                 segs.append(Segment(id: "files:" + Self.nid(cur), label: "Files in this folder",
                                     category: cat, size: loose, recl: 0,
-                                    node: nil, isType: false, drillable: false))
+                                    node: nil, isType: false, drillable: false, color: .clear))
             }
+            // Color folders by size rank so the biggest, most-glanced-at slices
+            // get the first, most-distinct hues. (The placeholder `.clear` above
+            // is always overwritten here.)
             return segs.sorted { $0.size > $1.size }
+                .enumerated().map { i, s in s.recolored(Palette.folderHue(i)) }
         } else {
             let sizes = Derive.typeSizes(cur)
             let recl = Derive.typeReclaim(cur)
             return sizes.map { (cat, size) in
                 Segment(id: "type:\(cat.rawValue)", label: cat.label, category: cat,
-                        size: size, recl: recl[cat] ?? 0, node: nil, isType: true, drillable: false)
+                        size: size, recl: recl[cat] ?? 0, node: nil, isType: true,
+                        drillable: false, color: Palette.color(cat))
             }.sorted { $0.size > $1.size }
         }
     }
