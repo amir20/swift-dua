@@ -6,6 +6,8 @@
 
 **A native macOS disk-space visualizer, written in SwiftUI.**
 
+<img src="docs/screenshot.png" width="840" alt="Halo visualizing a folder as an interactive donut, with a synced breakdown sidebar and reclaimable space called out">
+
 </div>
 
 Point it at a folder
@@ -81,3 +83,17 @@ There's a longer write-up of the design in [docs/halo.md](docs/halo.md).
 swift build
 swift test
 ```
+
+## Automation
+
+CI (`.github/workflows/ci.yml`) builds and tests on every push and PR and uploads
+`Halo.dmg`. [Renovate](https://docs.renovatebot.com/) keeps the GitHub Actions
+pinned versions current, and [Claude](https://github.com/anthropics/claude-code-action)
+reviews each pull request (and answers `@claude` mentions).
+
+Both bots need a one-time enable by a repo admin:
+
+1. Install the [Renovate](https://github.com/apps/renovate) and
+   [Claude](https://github.com/apps/claude) GitHub Apps on the repository.
+2. Add an `ANTHROPIC_API_KEY` repository secret
+   (Settings → Secrets and variables → Actions) for the Claude workflows.
