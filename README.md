@@ -1,8 +1,14 @@
-<img src="docs/icon.png" width="96" align="right" alt="">
+<div align="center">
+
+<img src="docs/icon.png" width="120" alt="Halo">
 
 # Halo
 
-A native macOS disk-space visualizer, written in SwiftUI. Point it at a folder
+**A native macOS disk-space visualizer, written in SwiftUI.**
+
+</div>
+
+Point it at a folder
 and it walks the whole tree, works out what's eating the space, and draws the
 result as an interactive donut. You can read the same data two ways — the folders
 sitting directly inside wherever you've drilled to, or everything rolled up by
