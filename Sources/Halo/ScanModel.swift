@@ -34,6 +34,24 @@ struct Arc: Identifiable {
 
 enum Lens { case folder, type }
 
+/// Summary of a completed reclaim, for a brief confirmation note.
+struct ReclaimOutcome { let trashed: Int; let failed: Int }
+
+/// One reviewable row in the reclaim confirmation dialog.
+struct ReclaimItem: Identifiable {
+    let id: ObjectIdentifier   // the source node's identity
+    let name: String
+    let url: URL
+    let size: Int64
+    let confidence: ReclaimConfidence
+    /// Short evidence token (`package.json`, `CACHEDIR.TAG`, or the category).
+    let signalLabel: String
+    /// Full human justification, for a secondary line / tooltip.
+    let reason: String
+    /// Whether it starts checked — high-confidence targets do.
+    let preselected: Bool
+}
+
 @MainActor
 @Observable
 final class ScanModel {
@@ -52,6 +70,16 @@ final class ScanModel {
     /// Whether the scanning activity ring is shown. Gated behind a short delay so
     /// a fast scan never flashes it.
     var showRing = false
+    /// Drives the reclaim confirmation sheet.
+    var showReclaimSheet = false
+    /// Result of the most recent reclaim, for a brief footer note.
+    var lastReclaim: ReclaimOutcome?
+    /// Scope (folder names below root) to re-enter once the post-reclaim rescan
+    /// finishes, so the user isn't bounced back to the root.
+    private var pendingScopeNames: [String]?
+    /// Reclaim outcome to surface once the post-reclaim rescan finishes (the
+    /// rescan clears `lastReclaim`, so it's re-applied at the end).
+    private var pendingReclaim: ReclaimOutcome?
 
     var current: DirNode? { path.last }
 
@@ -81,6 +109,9 @@ final class ScanModel {
         scanError = nil
         liveFiles = 0; liveBytes = 0
         showRing = false
+        // Don't carry a prior reclaim's footer note into an unrelated scan; a
+        // post-reclaim rescan re-applies it from `pendingReclaim` in finishScan.
+        lastReclaim = nil
         let prog = ScanProgress()
         progress = prog
         ringDelayTimer?.invalidate()
@@ -139,6 +170,16 @@ final class ScanModel {
             root = rebuilt
             path = [rebuilt]
         }
+        // Restore the scope we were in before a post-reclaim rescan.
+        if let names = pendingScopeNames, let r = root {
+            pendingScopeNames = nil
+            path = Self.resolvePath(from: r, names: names)
+        }
+        // Surface the reclaim result that triggered this rescan.
+        if let outcome = pendingReclaim {
+            pendingReclaim = nil
+            lastReclaim = outcome
+        }
         scanning = false
         // Fade the activity ring out as the real wedges take over.
         withAnimation(.easeOut(duration: 0.4)) { showRing = false }
@@ -154,8 +195,11 @@ final class ScanModel {
                 fileBytes: rootFiles, children: liveChildren)
     }
 
-    /// Loads an in-memory tree immediately (previews / tests).
-    func load(_ tree: DirNode) {
+    /// Loads an in-memory tree immediately (previews / tests). `rootPath` is the
+    /// absolute path the root represents, so `absoluteURL(for:)` can reconstruct
+    /// real paths in tests just as a live scan does.
+    func load(_ tree: DirNode, rootPath: String = "") {
+        scanRootPath = rootPath
         root = tree
         path = [tree]
         scanning = false
@@ -270,12 +314,9 @@ final class ScanModel {
 
     private var homeLeaf: String { root?.name ?? "~" }
 
-    /// Real filesystem URL of the directory currently shown in the breadcrumb:
-    /// the scan root joined with each navigated subdirectory's name.
+    /// Real filesystem URL of the directory currently shown in the breadcrumb.
     var currentURL: URL {
-        var url = URL(fileURLWithPath: scanRootPath)
-        for node in path.dropFirst() { url.append(component: node.name) }
-        return url
+        current.map(absoluteURL(for:)) ?? URL(fileURLWithPath: scanRootPath)
     }
 
     /// Opens a Finder window showing the current directory's contents.
@@ -284,6 +325,69 @@ final class ScanModel {
     /// anything Finder doesn't treat as a plain folder).
     func openInFinder() {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: currentURL.path)
+    }
+
+    // MARK: - Reclaim
+
+    /// Absolute filesystem URL of any node in the tree: the scan root joined with
+    /// the node's name chain (the root itself maps to the scan root).
+    func absoluteURL(for node: DirNode) -> URL {
+        var url = URL(fileURLWithPath: scanRootPath)
+        for n in Derive.pathTo(node).dropFirst() { url.append(component: n.name) }
+        return url
+    }
+
+    /// The safe targets in the current scope as reviewable rows, largest first,
+    /// with high-confidence targets pre-selected.
+    var reclaimPlan: [ReclaimItem] {
+        reclaimTargets.compactMap { node in
+            guard let mark = node.reclaim else { return nil }
+            return ReclaimItem(id: ObjectIdentifier(node), name: node.name,
+                               url: absoluteURL(for: node), size: node.size,
+                               confidence: mark.confidence,
+                               signalLabel: Self.signalLabel(mark.signal, category: node.category),
+                               reason: mark.reason, preselected: mark.confidence == .high)
+        }.sorted { $0.size > $1.size }
+    }
+
+    /// Move the chosen targets to the Trash, then rescan and restore the scope.
+    /// Trashing runs off the main actor; results hop back to drive the rescan.
+    func performReclaim(_ items: [ReclaimItem]) {
+        guard !items.isEmpty else { return }
+        let urls = items.map(\.url)
+        let scopeNames = path.dropFirst().map(\.name)
+        showReclaimSheet = false
+        Task.detached(priority: .userInitiated) {
+            let result = Reclaimer.moveToTrash(urls)
+            await MainActor.run {
+                self.pendingReclaim = ReclaimOutcome(trashed: result.trashed.count,
+                                                     failed: result.failed.count)
+                self.pendingScopeNames = scopeNames
+                self.scan(path: self.scanRootPath)
+            }
+        }
+    }
+
+    /// Re-derive a path from `root` by following child `names`, stopping at the
+    /// first name that no longer exists. Used to restore the user's scope after a
+    /// rescan, even if some folders along the way were just trashed.
+    static func resolvePath(from root: DirNode, names: [String]) -> [DirNode] {
+        var result = [root]
+        var node = root
+        for name in names {
+            guard let next = node.children.first(where: { $0.name == name }) else { break }
+            result.append(next)
+            node = next
+        }
+        return result
+    }
+
+    private static func signalLabel(_ s: ReclaimSignal, category: FileCategory) -> String {
+        switch s {
+        case .cachedirTag:     return "CACHEDIR.TAG"
+        case .manifest(let m): return m
+        case .knownName:       return category.label
+        }
     }
 
     // MARK: - Navigation

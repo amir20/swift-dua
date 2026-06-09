@@ -125,24 +125,41 @@ struct RailView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 7) {
-            // Reclaim is intentionally disabled in this build (visualize-only).
-            HStack(spacing: 8) {
-                Image(systemName: "trash")
-                Text("Reclaim \(formatSize(model.reclTotal))")
+        let n = model.reclaimTargets.count
+        let enabled = n > 0
+        return VStack(spacing: 7) {
+            Button { model.showReclaimSheet = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash")
+                    Text("Reclaim \(formatSize(model.reclTotal))")
+                }
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .glassEffect(.regular.tint(Palette.reclaim), in: .rect(cornerRadius: 10))
             }
-            .font(.system(size: 13.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity).frame(height: 40)
-            .glassEffect(.regular.tint(Palette.ink), in: .rect(cornerRadius: 10))
-            .opacity(0.4)
+            .buttonStyle(.plain)
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.4)
 
-            let n = model.reclaimTargets.count
-            Text("\(n) safe target\(n == 1 ? "" : "s") · everything moves to Trash first")
+            Text(footerNote(n))
                 .font(.system(size: 11))
-                .foregroundStyle(Palette.ink4)
+                .foregroundStyle((model.lastReclaim?.failed ?? 0) > 0 ? Palette.reclaim : Palette.ink4)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .overlay(alignment: .top) { Divider().overlay(Palette.line) }
+        .sheet(isPresented: $model.showReclaimSheet) {
+            ReclaimSheet(plan: model.reclaimPlan,
+                         onConfirm: { model.performReclaim($0) },
+                         onCancel: { model.showReclaimSheet = false })
+        }
+    }
+
+    private func footerNote(_ n: Int) -> String {
+        if let r = model.lastReclaim {
+            let base = "Moved \(r.trashed) to Trash"
+            return r.failed > 0 ? "\(base) · \(r.failed) couldn't be removed" : base
+        }
+        return "\(n) safe target\(n == 1 ? "" : "s") · everything moves to Trash first"
     }
 }
