@@ -35,14 +35,17 @@ jobs:
                  builds in Swift 6 language mode with strict checking).
               3. The reclaimability/safety logic in DiskKit — a false positive
                  that could flag user data as deletable is the worst outcome.
-            Skip style nits unless they affect correctness. Always finish with a
-            short summary comment — if you found nothing, say it looks good.
-          # The default tool allowlist denies the inline-comment tool and Bash,
-          # so Claude could review but never post (high permission_denials_count,
-          # "No buffered inline comments"). Allow the comment tool + read tools.
+            Skip style nits unless they affect correctness. Always finish by
+            posting a brief top-level PR comment summarizing the review (via
+            `gh pr comment`) — if you found nothing, say it looks good.
+          # The default tool allowlist denies posting, so Claude could review but
+          # never post. Allow the inline-comment tool, `gh pr comment` for the
+          # PR-level summary, and read tools to inspect the diff/code.
           claude_args: |
             --model claude-sonnet-4-6
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*)"
-          # Post a durable summary comment even when there are no inline issues.
-          use_sticky_comment: true
-          classify_inline_comments: false
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+          # track_progress creates a tracking comment Claude can update; unlike
+          # use_sticky_comment it actually works in prompt/automation mode
+          # (use_sticky_comment never creates the comment here — anthropics/
+          # claude-code-action#1108), so the summary would silently never post.
+          track_progress: true
