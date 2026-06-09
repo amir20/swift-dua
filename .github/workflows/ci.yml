@@ -49,7 +49,7 @@ jobs:
           swift --version
 
       - name: Build Halo.app and Halo.dmg
-        run: ./Scripts/make-dmg.sh
+        run: make dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4

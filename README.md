@@ -104,19 +104,19 @@ real temporary directory trees).
 
 ## Halo (GUI app)
 
-**Halo** is the SwiftUI disk visualizer. Run it from source, package it into a
-double-clickable, ad-hoc-signed `.app`, or build a drag-to-install `.dmg`:
+**Halo** is the SwiftUI disk visualizer. A `Makefile` drives the packaging (run
+`make` to list targets):
 
 ```sh
-swift run Halo                                                   # launch from source
-swift package --allow-writing-to-package-directory bundle-app Halo   # -> Halo.app
-./Scripts/make-dmg.sh                                            # -> Halo.dmg
-open Halo.app
+make run     # build & launch from source
+make app     # -> Halo.app  (double-clickable, ad-hoc signed)
+make dmg     # -> Halo.dmg  (drag-to-install disk image)
+make icon    # regenerate Icons/AppIcon.icns from the Swift generator
 ```
 
-The bundle picks up the app icon from `Icons/AppIcon.icns`; regenerate it with
-`./Icons/make-icon.sh` (renders the donut from the same oklch palette the app
-uses). CI builds and uploads `Halo.dmg` as an artifact on every push and PR.
+The icon is drawn from the same oklch palette the app uses
+(`Icons/make-icon.swift`). CI builds and uploads `Halo.dmg` as an artifact on
+every push and PR.
 
 ## Repository layout
 
@@ -129,4 +129,4 @@ CLI, the `Halo` SwiftUI app, and the `DiskKit` library itself.
 | `Sources/DiskKit/` | Shared scan model: classified directory tree, derivations, formatting. |
 | `Sources/Halo/` | SwiftUI donut visualizer built on `DiskKit`. |
 | `Plugins/BundleApp/` | `swift package bundle-app` — wraps a release binary into a `.app`. |
-| `Icons/` · `Scripts/` | Icon generator and `.dmg` packaging. |
+| `Makefile` · `Icons/` | Build/package targets and the Swift app-icon generator. |
