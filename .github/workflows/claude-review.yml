@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  # The action exchanges a GitHub OIDC token to authenticate; without this it
+  # fails with "Could not fetch an OIDC token".
+  id-token: write
 
 jobs:
   review:

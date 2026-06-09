@@ -20,6 +20,8 @@ permissions:
   pull-requests: write
   issues: write
   actions: read
+  # Required for the action's GitHub OIDC token exchange.
+  id-token: write
 
 jobs:
   claude:
