@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import DiskKit
 
 /// One ring slice / rail row in either lens.
@@ -54,6 +55,10 @@ final class ScanModel {
 
     var current: DirNode? { path.last }
 
+    /// Absolute filesystem path the scan was rooted at. Joined with the names of
+    /// the navigated `path` to recover the real directory under the breadcrumb.
+    private var scanRootPath = ""
+
     // Pieces kept so the root can be rebuilt as top-level subtrees stream in.
     private var rootName = "~"
     private var rootCategory: FileCategory = .other
@@ -71,6 +76,7 @@ final class ScanModel {
     /// Streams a real scan: the donut appears immediately and fills in as each
     /// top-level subtree completes, with a live counter throughout.
     func scan(path scanPath: String) {
+        scanRootPath = scanPath
         scanning = true
         scanError = nil
         liveFiles = 0; liveBytes = 0
@@ -264,11 +270,30 @@ final class ScanModel {
 
     private var homeLeaf: String { root?.name ?? "~" }
 
+    /// Real filesystem URL of the directory currently shown in the breadcrumb:
+    /// the scan root joined with each navigated subdirectory's name.
+    var currentURL: URL {
+        var url = URL(fileURLWithPath: scanRootPath)
+        for node in path.dropFirst() { url.append(component: node.name) }
+        return url
+    }
+
+    /// Opens a Finder window showing the current directory's contents.
+    /// Uses the file-viewer API (not `NSWorkspace.open`, which routes through
+    /// LaunchServices' *open-as-document* path and pops a "no app" dialog for
+    /// anything Finder doesn't treat as a plain folder).
+    func openInFinder() {
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: currentURL.path)
+    }
+
     // MARK: - Navigation
 
     func tapSegment(_ s: Segment) {
         if mode == .folder {
-            if let node = s.node, !node.children.isEmpty {
+            // Drill into any real folder — including a leaf that holds only files
+            // (it then shows its "Files in this folder" breakdown). The loose-files
+            // pseudo-segment carries no node, so it stays a no-op.
+            if let node = s.node {
                 hover = nil; expanded = nil
                 path.append(node)
                 refresh()
@@ -282,8 +307,7 @@ final class ScanModel {
 
     func jump(to node: DirNode) {
         mode = .folder; hover = nil; expanded = nil
-        let target = node.children.isEmpty ? (node.parent ?? node) : node
-        path = Derive.pathTo(target)
+        path = Derive.pathTo(node)
         refresh()
         sweepKey += 1
     }

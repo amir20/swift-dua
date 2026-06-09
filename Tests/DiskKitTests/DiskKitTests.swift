@@ -207,6 +207,50 @@ final class ReclaimScanTests: XCTestCase {
         XCTAssertEqual(vendor?.reclaim?.signal, .knownName)
     }
 
+    /// `Containers` must not bucket its whole subtree as un-reclaimable container
+    /// data: an app sandbox container's `Data/Library/Caches` is regenerable and
+    /// must surface as a reclaim target. Reproduces a 237 GB wallpaper cache that
+    /// was hidden because `Containers` overrode everything beneath it to `.container`.
+    func testContainerLibraryCachesIsReclaimableHigh() throws {
+        let root = try scanTree { base, fm in
+            let cache = base.appendingPathComponent(
+                "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches")
+            try fm.createDirectory(at: cache, withIntermediateDirectories: true)
+            try Data(count: 5_000_000).write(to: cache.appendingPathComponent("big.bin"))
+        }
+        let caches = try XCTUnwrap(find(root, "Caches"),
+                                   "the container's Caches dir must be a node, not absorbed into Containers")
+        XCTAssertEqual(caches.category, .cache)
+        XCTAssertEqual(caches.reclaim?.confidence, .high,
+                       "a Caches directly under Library is the canonical macOS cache root")
+        XCTAssertEqual(caches.reclaim?.signal, .knownName)
+        // The whole cache subtree counts once, attributed to the Caches root.
+        XCTAssertEqual(Derive.reclaimRoots(root).count, 1)
+        XCTAssertEqual(Derive.reclaimBytes(root), caches.size)
+    }
+
+    /// `~/Library/Caches` itself (not only container caches) is the high-confidence
+    /// macOS cache root.
+    func testUserLibraryCachesIsHigh() throws {
+        let root = try scanTree { base, fm in
+            let c = base.appendingPathComponent("Library/Caches/com.some.app")
+            try fm.createDirectory(at: c, withIntermediateDirectories: true)
+            try Data(count: 4_000).write(to: c.appendingPathComponent("blob.bin"))
+        }
+        XCTAssertEqual(find(root, "Caches")?.reclaim?.confidence, .high)
+    }
+
+    /// A `Caches`/`cache` that is NOT under `Library` keeps the weaker, name-only
+    /// medium confidence — the high tier is earned by the canonical location.
+    func testCachesOutsideLibraryStaysMedium() throws {
+        let root = try scanTree { base, fm in
+            let c = base.appendingPathComponent("myproject/cache")
+            try fm.createDirectory(at: c, withIntermediateDirectories: true)
+            try Data(count: 4_000).write(to: c.appendingPathComponent("x.bin"))
+        }
+        XCTAssertEqual(find(root, "cache")?.reclaim?.confidence, .medium)
+    }
+
     func testInvalidCachedirTagIgnored() throws {
         let root = try scanTree { base, fm in
             let dir = base.appendingPathComponent("notes")

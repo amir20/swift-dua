@@ -118,11 +118,15 @@ public enum TreeScanner {
         // every file rolls up to it, so per-file categorization is skipped (the
         // hot path under `node_modules` and friends).
         let earlyOverride = node.inherited ?? node.hint.category ?? Classifier.nameOverride(node.name)
+        // The immediate parent's name — context for location-aware rules (e.g. a
+        // `Caches` directly under `Library` is the canonical macOS cache root).
+        let parentName = ((node.path as NSString).deletingLastPathComponent as NSString).lastPathComponent
 
         guard let dirp = opendir(node.path) else {
             // Unreadable: classify from name/hint alone (no contents, no marker).
             apply(Classifier.classify(name: node.name, inherited: node.inherited,
-                                      hint: node.hint, hasCachedirTag: false), to: node)
+                                      hint: node.hint, hasCachedirTag: false,
+                                      parent: parentName), to: node)
             return
         }
         defer { closedir(dirp) }
@@ -159,7 +163,8 @@ public enum TreeScanner {
         }
 
         apply(Classifier.classify(name: node.name, inherited: node.inherited,
-                                  hint: node.hint, hasCachedirTag: hasCachedirTag), to: node)
+                                  hint: node.hint, hasCachedirTag: hasCachedirTag,
+                                  parent: parentName), to: node)
 
         // Roll files into the override bucket when there is one; otherwise the
         // per-extension buckets stand.

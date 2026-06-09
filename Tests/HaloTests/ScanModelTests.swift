@@ -95,4 +95,43 @@ final class ScanModelTests: XCTestCase {
         XCTAssertNil(hitTestArc(at: CGPoint(x: center + 400, y: center),
                                 in: arcs, center: center, r0: r0, r1: r1))
     }
+
+    private static let GB: Int64 = 1_073_741_824
+
+    /// Tapping a folder that holds only files (no subdirectories) must still
+    /// drill into it. Reproduces "the breadcrumb doesn't work" — `tapSegment`
+    /// used to ignore any folder whose `children` were empty, so clicking a
+    /// leaf folder did nothing.
+    func testTappingLeafFolderDrillsIntoIt() {
+        let leaf = DirNode(name: "Caches", category: .cache,
+                           isReclaimable: true, fileBytes: [.cache: 5 * Self.GB], children: [])
+        let root = DirNode(name: "alex", category: .other,
+                           isReclaimable: false, fileBytes: [:], children: [leaf])
+        let model = ScanModel()
+        model.load(root)
+
+        let seg = model.segments.first { $0.label == "Caches" }!
+        model.tapSegment(seg)
+
+        XCTAssertEqual(model.current?.name, "Caches", "tapping a leaf folder drills into it")
+        XCTAssertEqual(model.path.count, 2)
+    }
+
+    /// `jump(to:)` must land on the requested directory, not bounce up to its
+    /// parent when that directory has no subdirectories. Reproduces "clicking a
+    /// dir goes to the parent instead".
+    func testJumpToLeafDirLandsOnIt() {
+        let leaf = DirNode(name: "com.apple.wallpaper.caches", category: .cache,
+                           isReclaimable: true, fileBytes: [.cache: 200 * Self.GB], children: [])
+        let mid = DirNode(name: "Caches", category: .cache,
+                          isReclaimable: true, fileBytes: [:], children: [leaf])
+        let root = DirNode(name: "alex", category: .other,
+                           isReclaimable: false, fileBytes: [:], children: [mid])
+        let model = ScanModel()
+        model.load(root)
+
+        model.jump(to: leaf)
+        XCTAssertEqual(model.current?.name, "com.apple.wallpaper.caches",
+                       "jump lands on the leaf, not its parent")
+    }
 }

@@ -99,7 +99,13 @@ public enum Classifier {
         case "vendor":
             return NameKind(category: .deps, overridesChildren: true, reclaim: .medium)
         // Non-reclaimable categories.
-        case "containers", "docker":
+        case "containers":
+            // Category-only, NOT an override: an app sandbox container holds its
+            // own regenerable caches (`Data/Library/Caches`). Forcing `.container`
+            // on the whole subtree would bucket those as un-reclaimable container
+            // data and hide them — so classify each descendant on its own evidence.
+            return NameKind(category: .container, overridesChildren: false, reclaim: nil)
+        case "docker":
             return NameKind(category: .container, overridesChildren: true, reclaim: nil)
         case "movies", "music", "pictures", "photos":
             return NameKind(category: .media, overridesChildren: true, reclaim: nil)
@@ -132,7 +138,8 @@ public enum Classifier {
     public static func classify(name: String,
                                 inherited: FileCategory?,
                                 hint: Hint,
-                                hasCachedirTag: Bool) -> DirClass {
+                                hasCachedirTag: Bool,
+                                parent: String? = nil) -> DirClass {
         // Descendant of a reclaim root: attributed to the override, never its own
         // separate target.
         if let inherited {
@@ -152,9 +159,18 @@ public enum Classifier {
         }
         // Curated name fallback.
         let k = classifyName(name)
-        let mark = k.reclaim.map {
-            ReclaimMark(confidence: $0, signal: .knownName,
-                        reason: "known \(k.category.label.lowercased()) directory")
+        // A `Caches` sitting directly under a `Library` is *the* macOS cache root
+        // (`~/Library/Caches`, and every app sandbox container's
+        // `Data/Library/Caches`) — an unambiguous, system-rebuilt location. That
+        // context lifts the bare name's medium to high.
+        let isSystemCacheRoot = parent?.lowercased() == "library"
+            && ["caches", "cache", ".cache"].contains(name.lowercased())
+        let mark = k.reclaim.map { conf in
+            isSystemCacheRoot
+                ? ReclaimMark(confidence: .high, signal: .knownName,
+                              reason: "macOS cache directory (Library/Caches) — the system rebuilds it")
+                : ReclaimMark(confidence: conf, signal: .knownName,
+                              reason: "known \(k.category.label.lowercased()) directory")
         }
         return DirClass(category: k.category,
                         filesAs: k.overridesChildren ? k.category : nil,

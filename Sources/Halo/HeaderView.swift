@@ -19,6 +19,17 @@ struct HeaderView: View {
 
             Spacer(minLength: 12)
 
+            Button(action: model.openInFinder) {
+                Label("Open in Finder", systemImage: "folder")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Palette.ink2)
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 11)
+                    .frame(height: 28)
+            }
+            .buttonStyle(.glass)
+            .help("Open this folder in Finder")
+
             segmented
         }
         .padding(.horizontal, 22)
