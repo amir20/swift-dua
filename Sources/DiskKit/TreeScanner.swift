@@ -20,7 +20,7 @@ public enum TreeScanner {
     /// `scanStreaming` so it can render before a large scan finishes.
     public static func scan(_ rootPath: String, progress: ScanProgress = ScanProgress()) -> DirNode {
         let rootName = (rootPath as NSString).lastPathComponent
-        let root = BuildNode(name: rootName, path: rootPath, inherited: nil)
+        let root = BuildNode(name: rootName, path: rootPath, inherited: nil, hint: .none)
         drain(NodeQueue([root]), progress: progress)
         return freeze(root)
     }
@@ -40,7 +40,7 @@ public enum TreeScanner {
         onDone: @Sendable () -> Void
     ) {
         let rootName = (rootPath as NSString).lastPathComponent
-        let root = BuildNode(name: rootName, path: rootPath, inherited: nil)
+        let root = BuildNode(name: rootName, path: rootPath, inherited: nil, hint: .none)
         // List the root directory synchronously so we can paint placeholders for
         // every top-level subtree before the heavy walk begins.
         list(root, progress: progress)
@@ -48,12 +48,14 @@ public enum TreeScanner {
         let tops = root.children
         for (i, t) in tops.enumerated() { t.rootIndex = i }
 
+        // Placeholders are size-0 and filtered out of the UI, so their (not-yet-
+        // computed) classification is irrelevant — never reclaimable.
         let placeholders = tops.map { t in
-            DirNode(name: t.name, category: t.category,
-                    isReclaimable: t.reclaimable, fileBytes: [:], children: [])
+            DirNode(name: t.name, category: t.category, reclaim: nil,
+                    fileBytes: [:], children: [])
         }
         onRoot(DirNode(name: root.name, category: root.category,
-                       isReclaimable: root.reclaimable,
+                       reclaim: root.reclaim,
                        fileBytes: root.fileBytes, children: placeholders))
 
         guard !tops.isEmpty else { onDone(); return }
@@ -100,17 +102,38 @@ public enum TreeScanner {
 
     // MARK: - Per-directory work
 
-    /// Lists one directory: buckets its files into `node.fileBytes` and creates
-    /// a `BuildNode` for each sub-directory (pushed onto the queue by the
-    /// caller). Called exactly once per node, by the single worker that pops it,
-    /// so the writes to `node` need no lock.
+    /// Lists one directory: classifies it, buckets its files into
+    /// `node.fileBytes`, and creates a `BuildNode` for each sub-directory (pushed
+    /// onto the queue by the caller). Called exactly once per node, by the single
+    /// worker that pops it, so the writes to `node` need no lock.
+    ///
+    /// Classification is finalized **here**, not at `BuildNode.init`, because the
+    /// evidence needs a dir's own contents (`CACHEDIR.TAG`) and its siblings
+    /// (manifests sit next to the dir they regenerate). The parent supplied the
+    /// sibling-manifest `hint` when it created this node; we combine that with the
+    /// name and any `CACHEDIR.TAG` seen here.
     private static func list(_ node: BuildNode, progress: ScanProgress) {
-        guard let dirp = opendir(node.path) else { return }
+        // The override (if any) is known before reading contents — from a
+        // reclaimable ancestor, a parent manifest hint, or the name. When set,
+        // every file rolls up to it, so per-file categorization is skipped (the
+        // hot path under `node_modules` and friends).
+        let earlyOverride = node.inherited ?? node.hint.category ?? Classifier.nameOverride(node.name)
+
+        guard let dirp = opendir(node.path) else {
+            // Unreadable: classify from name/hint alone (no contents, no marker).
+            apply(Classifier.classify(name: node.name, inherited: node.inherited,
+                                      hint: node.hint, hasCachedirTag: false), to: node)
+            return
+        }
         defer { closedir(dirp) }
-        var fileBytes: [FileCategory: Int64] = [:]
-        var children: [BuildNode] = []
+
+        var perExt: [FileCategory: Int64] = [:]
+        var dirEnts: [(name: String, path: String)] = []
+        var siblings = Set<String>()
         var fileCount = 0
         var byteSum: Int64 = 0
+        var hasCachedirTag = false
+
         while let entp = readdir(dirp) {
             let name = direntName(entp)
             if name == "." || name == ".." { continue }
@@ -119,24 +142,66 @@ public enum TreeScanner {
             if full.withCString({ lstat($0, &st) }) != 0 { continue }
             let fmt = UInt32(st.st_mode) & UInt32(S_IFMT)
             if fmt == UInt32(S_IFDIR) {
-                children.append(BuildNode(name: name, path: full, inherited: node.filesAs))
+                dirEnts.append((name, full))
             } else if fmt == UInt32(S_IFREG) {
                 let bytes = Int64(st.st_blocks) * 512
-                let cat = node.filesAs ?? Classifier.classifyFile(ext: fileExt(name))
-                fileBytes[cat, default: 0] += bytes
-                fileCount += 1
                 byteSum += bytes
+                fileCount += 1
+                // Only categorize per-extension when nothing overrides this dir;
+                // an override (or a late CACHEDIR.TAG) rolls every file into one
+                // bucket below.
+                if earlyOverride == nil {
+                    perExt[Classifier.classifyFile(ext: fileExt(name)), default: 0] += bytes
+                }
+                siblings.insert(name.lowercased())
+                if name == "CACHEDIR.TAG", validCachedirTag(full) { hasCachedirTag = true }
             }
         }
-        node.fileBytes = fileBytes
-        node.children = children
+
+        apply(Classifier.classify(name: node.name, inherited: node.inherited,
+                                  hint: node.hint, hasCachedirTag: hasCachedirTag), to: node)
+
+        // Roll files into the override bucket when there is one; otherwise the
+        // per-extension buckets stand.
+        node.fileBytes = node.filesAs.map { [$0: byteSum] } ?? perExt
+
+        // Create children, each carrying the manifest evidence visible right here.
+        // Under an override (`filesAs != nil`) every child inherits the override
+        // and `classify` ignores the hint, so skip computing it — this is the hot
+        // path inside a giant `node_modules`/cache subtree.
+        let childHint = { (name: String) in
+            node.filesAs == nil ? Classifier.hint(forChild: name, siblings: siblings) : .none
+        }
+        node.children = dirEnts.map { ent in
+            BuildNode(name: ent.name, path: ent.path,
+                      inherited: node.filesAs, hint: childHint(ent.name))
+        }
+
         progress.add(files: fileCount, bytes: byteSum)
+    }
+
+    private static func apply(_ dc: Classifier.DirClass, to node: BuildNode) {
+        node.category = dc.category
+        node.filesAs = dc.filesAs
+        node.reclaim = dc.reclaim
+    }
+
+    /// True if `path` is a `CACHEDIR.TAG` whose contents begin with the standard
+    /// signature (per <https://bford.info/cachedir/>). The signature is verified,
+    /// not just the filename, so a coincidental file can't mark a dir as a cache.
+    private static func validCachedirTag(_ path: String) -> Bool {
+        let signature = Array("Signature: 8a477f597d28d172789f06886806bc55".utf8)
+        guard let fp = path.withCString({ fopen($0, "rb") }) else { return false }
+        defer { fclose(fp) }
+        var buf = [UInt8](repeating: 0, count: signature.count)
+        let n = fread(&buf, 1, signature.count, fp)
+        return n == signature.count && buf == signature
     }
 
     /// Converts the fully-built mutable tree into the immutable `DirNode` tree,
     /// computing subtree sizes and wiring parents bottom-up via `DirNode.init`.
     private static func freeze(_ b: BuildNode) -> DirNode {
-        DirNode(name: b.name, category: b.category, isReclaimable: b.reclaimable,
+        DirNode(name: b.name, category: b.category, reclaim: b.reclaim,
                 fileBytes: b.fileBytes, children: b.children.map(freeze))
     }
 
@@ -161,30 +226,37 @@ public enum TreeScanner {
 /// finishes (`TreeScanner.freeze`).
 ///
 /// `@unchecked Sendable` is safe because each node is *processed by exactly one
-/// worker* (it is popped from the queue once), and that worker is the only
-/// writer of `fileBytes`/`children`. Cross-thread visibility of those writes is
-/// established by the `NodeQueue`/`SubtreeTracker` locks before any other thread
-/// (or the final `freeze`) reads them.
+/// worker* (it is popped from the queue once), and that worker is the only writer
+/// of the classification (`category`/`filesAs`/`reclaim`, set in `list`) and of
+/// `fileBytes`/`children`. The immutable inputs (`inherited`, `hint`) are set by
+/// the parent's worker before the node is pushed; cross-thread visibility of all
+/// writes is established by the `NodeQueue`/`SubtreeTracker` locks before any
+/// other thread (or the final `freeze`) reads them.
 private final class BuildNode: @unchecked Sendable {
     let name: String
     let path: String
-    let category: FileCategory
-    let reclaimable: Bool
+    /// Override category inherited from a reclaimable ancestor (nil at the top).
+    let inherited: FileCategory?
+    /// Manifest evidence the parent observed about this dir when creating it.
+    let hint: Classifier.Hint
+
+    // Classification — finalized once, in `list`, by this node's own worker.
+    var category: FileCategory = .other
     /// Override category applied to this node's own files and inherited by every
     /// descendant (e.g. everything under `node_modules` is "Dependencies").
-    let filesAs: FileCategory?
+    var filesAs: FileCategory?
+    var reclaim: ReclaimMark?
+
     var fileBytes: [FileCategory: Int64] = [:]
     var children: [BuildNode] = []
     /// Index of the top-level subtree this node belongs to (streaming only).
     var rootIndex = 0
 
-    init(name: String, path: String, inherited: FileCategory?) {
+    init(name: String, path: String, inherited: FileCategory?, hint: Classifier.Hint) {
         self.name = name
         self.path = path
-        let kind = Classifier.classifyDir(name)
-        self.filesAs = inherited ?? (kind.overridesChildren ? kind.category : nil)
-        self.category = inherited ?? kind.category
-        self.reclaimable = inherited == nil ? kind.reclaimable : false
+        self.inherited = inherited
+        self.hint = hint
     }
 }
 

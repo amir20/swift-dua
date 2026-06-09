@@ -57,7 +57,7 @@ final class ScanModel {
     // Pieces kept so the root can be rebuilt as top-level subtrees stream in.
     private var rootName = "~"
     private var rootCategory: FileCategory = .other
-    private var rootReclaimable = false
+    private var rootReclaim: ReclaimMark?
     private var rootFiles: [FileCategory: Int64] = [:]
     private var liveChildren: [DirNode] = []
     private var progress: ScanProgress?
@@ -105,7 +105,7 @@ final class ScanModel {
     private func installRoot(_ node: DirNode) {
         rootName = node.name
         rootCategory = node.category
-        rootReclaimable = node.isReclaimable
+        rootReclaim = node.reclaim
         rootFiles = node.fileBytes
         liveChildren = node.children
         root = node
@@ -141,7 +141,10 @@ final class ScanModel {
     }
 
     private func rebuildRoot() -> DirNode? {
-        DirNode(name: rootName, category: rootCategory, isReclaimable: rootReclaimable,
+        // Preserve the root's full mark (confidence/signal/reason), not a Bool —
+        // otherwise the streaming restitch would launder a medium-confidence root
+        // up to high via the Bool convenience initializer.
+        DirNode(name: rootName, category: rootCategory, reclaim: rootReclaim,
                 fileBytes: rootFiles, children: liveChildren)
     }
 

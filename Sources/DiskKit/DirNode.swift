@@ -17,13 +17,18 @@ public final class DirNode: Identifiable, @unchecked Sendable {
     /// This directory's own classification (drives folder-mode slice color and
     /// the "where does this type live" grouping).
     public let category: FileCategory
-    /// Whole-directory reclaimable target (e.g. `node_modules`, `Caches`, `.Trash`).
-    public let isReclaimable: Bool
+    /// Why this whole directory is a reclaimable target (with confidence/reason),
+    /// or `nil` to keep. See `ReclaimMark`.
+    public let reclaim: ReclaimMark?
     /// Bytes of files directly in this directory, keyed by the file's category.
     public let fileBytes: [FileCategory: Int64]
     public let children: [DirNode]
     /// Total subtree size in bytes (own files + all descendants).
     public let size: Int64
+
+    /// Whether the directory is a reclaimable target. Keeps the many read sites
+    /// (`Derive`, the rail badges) working against the richer `reclaim`.
+    public var isReclaimable: Bool { reclaim != nil }
 
     public private(set) weak var parent: DirNode?
 
@@ -31,15 +36,30 @@ public final class DirNode: Identifiable, @unchecked Sendable {
 
     public init(name: String,
                 category: FileCategory,
-                isReclaimable: Bool,
+                reclaim: ReclaimMark?,
                 fileBytes: [FileCategory: Int64],
                 children: [DirNode]) {
         self.name = name
         self.category = category
-        self.isReclaimable = isReclaimable
+        self.reclaim = reclaim
         self.fileBytes = fileBytes
         self.children = children
         self.size = children.reduce(0) { $0 + $1.size } + fileBytes.values.reduce(0, +)
         for child in children { child.parent = self }
+    }
+
+    /// Convenience for callers that only have a boolean reclaimable flag —
+    /// `MockTree` and tests. `true` synthesizes a generic **medium**-confidence
+    /// mark; `false` maps to `nil`. Medium deliberately: a bare boolean carries no
+    /// evidence, so it must never fabricate the auto-purge-eligible `.high` tier.
+    public convenience init(name: String,
+                            category: FileCategory,
+                            isReclaimable: Bool,
+                            fileBytes: [FileCategory: Int64],
+                            children: [DirNode]) {
+        self.init(name: name, category: category,
+                  reclaim: isReclaimable ? ReclaimMark(confidence: .medium, signal: .knownName,
+                                                       reason: "reclaimable") : nil,
+                  fileBytes: fileBytes, children: children)
     }
 }

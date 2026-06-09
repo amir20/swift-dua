@@ -1,49 +1,167 @@
 import Foundation
 
-/// Rule-based classification of directories and files into `FileCategory`s,
-/// distilled from the design's intent: surface developer junk (`node_modules`,
-/// caches, build output, Docker, stale checkpoints) as first-class concepts.
+/// Evidence-based classification of directories and files into `FileCategory`s,
+/// and detection of reclaimable directories.
+///
+/// A directory is flagged reclaimable when there is *evidence* it can be
+/// regenerated, in precedence order (strongest first):
+///   1. it is a descendant of a reclaim root (attributed to that override);
+///   2. a **sibling manifest** rebuilds it (`package.json` ↔ `node_modules`);
+///   3. it carries a verified **`CACHEDIR.TAG`** cache marker;
+///   4. its name is on the **curated list** (high for unambiguous names, medium
+///      for names that could also be real user data).
+/// Confidence takes the strongest match; category takes the most specific.
 public enum Classifier {
 
-    /// How a directory is categorized.
-    public struct DirKind {
-        public let category: FileCategory
-        /// The directory as a whole is safe-ish to delete and regenerates.
-        public let reclaimable: Bool
-        /// Everything beneath this directory should be attributed to
-        /// `category` regardless of file extension (e.g. all files under
-        /// `node_modules` are "Dependencies", all under `Caches` are "Caches").
-        public let overridesChildren: Bool
+    // MARK: - Evidence passed parent → child
+
+    /// What a parent observed about a child it is creating: a sibling manifest
+    /// (if any) that regenerates a directory of the child's name, and the
+    /// category that implies.
+    public struct Hint: Sendable {
+        public let manifest: String?
+        public let category: FileCategory?
+        public static let none = Hint(manifest: nil, category: nil)
     }
 
-    /// Classify a directory by its (lowercased) name.
-    public static func classifyDir(_ name: String) -> DirKind {
-        let n = name.lowercased()
-        switch n {
-        case "node_modules", ".venv", "venv", "pods", "vendor", ".cargo", "site-packages":
-            return DirKind(category: .deps, reclaimable: true, overridesChildren: true)
-        case "caches", "cache", ".cache", "wandb":
-            return DirKind(category: .cache, reclaimable: true, overridesChildren: true)
-        case "deriveddata", ".next", "dist", "build", ".build", "target", "out", ".turbo":
-            return DirKind(category: .build, reclaimable: true, overridesChildren: true)
+    /// Result of classifying a directory.
+    public struct DirClass: Sendable {
+        public let category: FileCategory
+        /// Override applied to this dir's own files and inherited by every
+        /// descendant (`nil` = no override).
+        public let filesAs: FileCategory?
+        public let reclaim: ReclaimMark?
+    }
+
+    // MARK: - Manifest evidence
+
+    private struct ManifestRule {
+        let manifest: String        // lowercased filename
+        let dirs: Set<String>       // lowercased dir names it regenerates
+        let category: FileCategory
+    }
+
+    private static let manifestRules: [ManifestRule] = [
+        .init(manifest: "package.json",     dirs: ["node_modules"], category: .deps),
+        .init(manifest: "package.json",     dirs: ["dist", ".next", "out", ".turbo", ".nuxt", ".svelte-kit", ".parcel-cache"], category: .build),
+        .init(manifest: "cargo.toml",       dirs: ["target"], category: .build),
+        .init(manifest: "podfile",          dirs: ["pods"], category: .deps),
+        .init(manifest: "go.mod",           dirs: ["vendor"], category: .deps),
+        .init(manifest: "composer.json",    dirs: ["vendor"], category: .deps),
+        // Note: NOT vendor — a Ruby `vendor/` is hand-maintained, checked-in
+        // content; `bundle install` regenerates `.bundle`, not `vendor/`.
+        .init(manifest: "gemfile",          dirs: [".bundle"], category: .deps),
+        .init(manifest: "pyproject.toml",   dirs: [".venv", "venv"], category: .deps),
+        .init(manifest: "requirements.txt", dirs: [".venv", "venv"], category: .deps),
+        .init(manifest: "setup.py",         dirs: [".venv", "venv"], category: .deps),
+        .init(manifest: "pyproject.toml",   dirs: ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"], category: .cache),
+        .init(manifest: "build.gradle",     dirs: ["build", ".gradle"], category: .build),
+        .init(manifest: "settings.gradle",  dirs: ["build", ".gradle"], category: .build),
+        .init(manifest: "pubspec.yaml",     dirs: [".dart_tool", "build"], category: .build),
+    ]
+
+    /// The hint for a child named `childName`, given the (lowercased) set of file
+    /// names present in the parent directory.
+    public static func hint(forChild childName: String, siblings: Set<String>) -> Hint {
+        let n = childName.lowercased()
+        for rule in manifestRules where rule.dirs.contains(n) && siblings.contains(rule.manifest) {
+            return Hint(manifest: rule.manifest, category: rule.category)
+        }
+        return .none
+    }
+
+    // MARK: - Name rules
+
+    struct NameKind {
+        let category: FileCategory
+        let overridesChildren: Bool
+        /// Reclaim confidence if reclaimable by name alone (`nil` = keep).
+        let reclaim: ReclaimConfidence?
+    }
+
+    static func classifyName(_ name: String) -> NameKind {
+        switch name.lowercased() {
+        // Unambiguous regenerable dirs — high confidence by name alone.
+        case "node_modules", ".venv", "venv", "site-packages", "pods", ".cargo":
+            return NameKind(category: .deps, overridesChildren: true, reclaim: .high)
+        case "deriveddata", ".next", ".turbo", ".gradle":
+            return NameKind(category: .build, overridesChildren: true, reclaim: .high)
         case ".trash":
-            return DirKind(category: .trash, reclaimable: true, overridesChildren: true)
+            return NameKind(category: .trash, overridesChildren: true, reclaim: .high)
+        case "wandb", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache":
+            return NameKind(category: .cache, overridesChildren: true, reclaim: .high)
+        // Ambiguous names — could hold real user data, so medium until something
+        // corroborates (a manifest sibling or CACHEDIR.TAG lifts these to high).
+        case "build", ".build", "dist", "out", "target":
+            return NameKind(category: .build, overridesChildren: true, reclaim: .medium)
+        case "caches", "cache", ".cache":
+            return NameKind(category: .cache, overridesChildren: true, reclaim: .medium)
+        case "vendor":
+            return NameKind(category: .deps, overridesChildren: true, reclaim: .medium)
+        // Non-reclaimable categories.
         case "containers", "docker":
-            return DirKind(category: .container, reclaimable: false, overridesChildren: true)
+            return NameKind(category: .container, overridesChildren: true, reclaim: nil)
         case "movies", "music", "pictures", "photos":
-            return DirKind(category: .media, reclaimable: false, overridesChildren: true)
+            return NameKind(category: .media, overridesChildren: true, reclaim: nil)
         case "documents", "notes":
-            return DirKind(category: .docs, reclaimable: false, overridesChildren: false)
+            return NameKind(category: .docs, overridesChildren: false, reclaim: nil)
         case "applications":
-            return DirKind(category: .app, reclaimable: false, overridesChildren: true)
+            return NameKind(category: .app, overridesChildren: true, reclaim: nil)
         case "library", "application support":
-            return DirKind(category: .other, reclaimable: false, overridesChildren: false)
+            return NameKind(category: .other, overridesChildren: false, reclaim: nil)
         case "projects", "developer", "code", "src", "repos", ".git":
-            return DirKind(category: .code, reclaimable: false, overridesChildren: false)
+            return NameKind(category: .code, overridesChildren: false, reclaim: nil)
         default:
-            return DirKind(category: .other, reclaimable: false, overridesChildren: false)
+            return NameKind(category: .other, overridesChildren: false, reclaim: nil)
         }
     }
+
+    /// The category a name imposes on its descendants (`nil` if it doesn't
+    /// override). Cheap and name-only — lets the scanner bucket a dir's files
+    /// before its full (contents-dependent) classification is known.
+    static func nameOverride(_ name: String) -> FileCategory? {
+        let k = classifyName(name)
+        return k.overridesChildren ? k.category : nil
+    }
+
+    // MARK: - Final classification
+
+    /// Finalize a directory's classification from its name, the hint its parent
+    /// passed, the inherited override (if under a reclaim root), and whether it
+    /// contains a verified `CACHEDIR.TAG`.
+    public static func classify(name: String,
+                                inherited: FileCategory?,
+                                hint: Hint,
+                                hasCachedirTag: Bool) -> DirClass {
+        // Descendant of a reclaim root: attributed to the override, never its own
+        // separate target.
+        if let inherited {
+            return DirClass(category: inherited, filesAs: inherited, reclaim: nil)
+        }
+        // Manifest evidence — strongest, most specific category.
+        if let manifest = hint.manifest, let cat = hint.category {
+            return DirClass(category: cat, filesAs: cat,
+                            reclaim: ReclaimMark(confidence: .high, signal: .manifest(manifest),
+                                                 reason: "regenerable — \(manifest) is alongside it"))
+        }
+        // Verified cache marker.
+        if hasCachedirTag {
+            return DirClass(category: .cache, filesAs: .cache,
+                            reclaim: ReclaimMark(confidence: .high, signal: .cachedirTag,
+                                                 reason: "marked as a cache (CACHEDIR.TAG)"))
+        }
+        // Curated name fallback.
+        let k = classifyName(name)
+        let mark = k.reclaim.map {
+            ReclaimMark(confidence: $0, signal: .knownName,
+                        reason: "known \(k.category.label.lowercased()) directory")
+        }
+        return DirClass(category: k.category,
+                        filesAs: k.overridesChildren ? k.category : nil,
+                        reclaim: mark)
+    }
+
+    // MARK: - Files
 
     /// Classify a file by its (lowercased, no-dot) extension.
     public static func classifyFile(ext: String) -> FileCategory {

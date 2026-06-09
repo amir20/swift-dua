@@ -20,19 +20,67 @@ private final class StreamSink: @unchecked Sendable {
 }
 
 final class ClassifierTests: XCTestCase {
-    func testReclaimableDirsOverrideChildren() {
-        let nm = Classifier.classifyDir("node_modules")
+    /// Classify `name` as if it were a child of a directory containing
+    /// `siblings`, with an optional inherited override / CACHEDIR.TAG.
+    private func classify(_ name: String, siblings: Set<String> = [],
+                          inherited: FileCategory? = nil, tag: Bool = false) -> Classifier.DirClass {
+        let hint = Classifier.hint(forChild: name, siblings: siblings)
+        return Classifier.classify(name: name, inherited: inherited, hint: hint, hasCachedirTag: tag)
+    }
+
+    func testUnambiguousNamesAreHighByName() {
+        let nm = classify("node_modules")
         XCTAssertEqual(nm.category, .deps)
-        XCTAssertTrue(nm.reclaimable)
-        XCTAssertTrue(nm.overridesChildren)
+        XCTAssertEqual(nm.filesAs, .deps)
+        XCTAssertEqual(nm.reclaim?.confidence, .high)
+        XCTAssertEqual(nm.reclaim?.signal, .knownName)
 
-        let caches = Classifier.classifyDir("Caches")
-        XCTAssertEqual(caches.category, .cache)
-        XCTAssertTrue(caches.reclaimable)
+        XCTAssertEqual(classify(".Trash").reclaim?.confidence, .high)
+        XCTAssertEqual(classify("DerivedData").category, .build)
+        XCTAssertEqual(classify("DerivedData").reclaim?.confidence, .high)
+    }
 
-        let trash = Classifier.classifyDir(".Trash")
-        XCTAssertEqual(trash.category, .trash)
-        XCTAssertTrue(trash.reclaimable)
+    func testAmbiguousNameAloneIsMedium() {
+        let b = classify("build")
+        XCTAssertEqual(b.category, .build)
+        XCTAssertEqual(b.reclaim?.confidence, .medium)
+        XCTAssertEqual(classify("cache").reclaim?.confidence, .medium)
+    }
+
+    func testManifestSiblingLiftsToHigh() {
+        let nm = classify("node_modules", siblings: ["package.json"])
+        XCTAssertEqual(nm.reclaim?.confidence, .high)
+        XCTAssertEqual(nm.reclaim?.signal, .manifest("package.json"))
+
+        let target = classify("target", siblings: ["cargo.toml"])
+        XCTAssertEqual(target.category, .build)
+        XCTAssertEqual(target.reclaim?.signal, .manifest("cargo.toml"))
+    }
+
+    func testCachedirTagFlagsAsCache() {
+        let c = classify("weird-cache", tag: true)
+        XCTAssertEqual(c.category, .cache)
+        XCTAssertEqual(c.reclaim?.confidence, .high)
+        XCTAssertEqual(c.reclaim?.signal, .cachedirTag)
+    }
+
+    func testManifestBeatsCachedirTagForCategory() {
+        // target with Cargo.toml beside it AND a CACHEDIR.TAG inside → build.
+        let target = classify("target", siblings: ["cargo.toml"], tag: true)
+        XCTAssertEqual(target.category, .build)
+        XCTAssertEqual(target.reclaim?.signal, .manifest("cargo.toml"))
+    }
+
+    func testInheritedDescendantIsNotItsOwnTarget() {
+        let child = classify("anything", inherited: .deps)
+        XCTAssertEqual(child.category, .deps)
+        XCTAssertNil(child.reclaim, "a descendant of a reclaim root is not separately reclaimable")
+    }
+
+    func testNonReclaimableNames() {
+        XCTAssertNil(classify("Library").reclaim)
+        XCTAssertNil(classify("Documents").reclaim)
+        XCTAssertNil(classify("Movies").reclaim)
     }
 
     func testFileExtensionCategories() {
@@ -40,6 +88,133 @@ final class ClassifierTests: XCTestCase {
         XCTAssertEqual(Classifier.classifyFile(ext: "swift"), .code)
         XCTAssertEqual(Classifier.classifyFile(ext: "pdf"), .docs)
         XCTAssertEqual(Classifier.classifyFile(ext: "xyz"), .other)
+    }
+}
+
+/// End-to-end: the detector flags reclaimable directories through a real scan.
+final class ReclaimScanTests: XCTestCase {
+    private func scanTree(_ build: (URL, FileManager) throws -> Void) throws -> DirNode {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("diskkit-reclaim-\(UUID().uuidString)")
+        try fm.createDirectory(at: base, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: base) }
+        try build(base, fm)
+        return TreeScanner.scan(base.path)
+    }
+
+    private func find(_ n: DirNode, _ name: String) -> DirNode? {
+        if n.name == name { return n }
+        for c in n.children { if let f = find(c, name) { return f } }
+        return nil
+    }
+
+    func testManifestEvidenceFlagsHigh() throws {
+        let root = try scanTree { base, fm in
+            try fm.createDirectory(at: base.appendingPathComponent("proj/node_modules"),
+                                   withIntermediateDirectories: true)
+            try Data("{}".utf8).write(to: base.appendingPathComponent("proj/package.json"))
+            try Data(count: 5_000).write(to: base.appendingPathComponent("proj/node_modules/dep.bin"))
+        }
+        let nm = find(root, "node_modules")
+        XCTAssertEqual(nm?.reclaim?.confidence, .high)
+        XCTAssertEqual(nm?.reclaim?.signal, .manifest("package.json"))
+        XCTAssertEqual(nm?.category, .deps)
+    }
+
+    func testUnambiguousNameWithoutManifestIsHigh() throws {
+        let root = try scanTree { base, fm in
+            try fm.createDirectory(at: base.appendingPathComponent("node_modules"),
+                                   withIntermediateDirectories: true)
+            try Data(count: 5_000).write(to: base.appendingPathComponent("node_modules/dep.bin"))
+        }
+        XCTAssertEqual(find(root, "node_modules")?.reclaim?.signal, .knownName)
+    }
+
+    func testAmbiguousNameAloneIsMedium() throws {
+        let root = try scanTree { base, fm in
+            try fm.createDirectory(at: base.appendingPathComponent("build"),
+                                   withIntermediateDirectories: true)
+            try Data(count: 5_000).write(to: base.appendingPathComponent("build/out.bin"))
+        }
+        XCTAssertEqual(find(root, "build")?.reclaim?.confidence, .medium)
+    }
+
+    func testCachedirTagDetected() throws {
+        let root = try scanTree { base, fm in
+            let cache = base.appendingPathComponent("weird-cache")
+            try fm.createDirectory(at: cache, withIntermediateDirectories: true)
+            try Data("Signature: 8a477f597d28d172789f06886806bc55\n# by some tool".utf8)
+                .write(to: cache.appendingPathComponent("CACHEDIR.TAG"))
+            try Data(count: 5_000).write(to: cache.appendingPathComponent("blob.bin"))
+        }
+        let c = try XCTUnwrap(find(root, "weird-cache"))
+        XCTAssertEqual(c.reclaim?.signal, .cachedirTag)
+        XCTAssertEqual(c.category, .cache)
+        // blob.bin would be `.other` by extension, but a CACHEDIR.TAG dir rolls
+        // every file up to `.cache` (the late-override rebucket path).
+        XCTAssertEqual(Set(c.fileBytes.keys), [.cache],
+                       "a CACHEDIR.TAG dir's own files attribute to .cache, not their extension")
+    }
+
+    /// Exactly the 43-byte signature with no trailing bytes — the common real
+    /// CACHEDIR.TAG shape and the zero-margin boundary of `validCachedirTag`.
+    func testCachedirTagExactSignatureNoTrailingBytes() throws {
+        let root = try scanTree { base, fm in
+            let cache = base.appendingPathComponent("tight-cache")
+            try fm.createDirectory(at: cache, withIntermediateDirectories: true)
+            try Data("Signature: 8a477f597d28d172789f06886806bc55".utf8)
+                .write(to: cache.appendingPathComponent("CACHEDIR.TAG"))
+            try Data(count: 3_000).write(to: cache.appendingPathComponent("x.bin"))
+        }
+        XCTAssertEqual(find(root, "tight-cache")?.reclaim?.signal, .cachedirTag)
+    }
+
+    /// A reclaim root nested under another must NOT be a separate target —
+    /// descendants carry the inherited override, so the accounting a future purge
+    /// relies on (`reclaimRoots`/`reclaimBytes`) counts the outer one exactly once.
+    func testNestedReclaimRootIsNotDoubleCounted() throws {
+        let root = try scanTree { base, fm in
+            // An inner node_modules whose own name would otherwise flag high.
+            try fm.createDirectory(at: base.appendingPathComponent("node_modules/pkg/node_modules"),
+                                   withIntermediateDirectories: true)
+            try Data(count: 7_000).write(to: base.appendingPathComponent("node_modules/pkg/node_modules/dep.bin"))
+        }
+        let outer = try XCTUnwrap(find(root, "node_modules"))
+        XCTAssertNotNil(outer.reclaim, "the outer node_modules is the reclaim target")
+        func assertNoReclaimBelow(_ n: DirNode) {
+            for c in n.children {
+                XCTAssertNil(c.reclaim, "\(c.name) under a reclaim root must not be its own target")
+                assertNoReclaimBelow(c)
+            }
+        }
+        assertNoReclaimBelow(outer)
+        XCTAssertEqual(Derive.reclaimRoots(root).count, 1, "exactly one reclaim target")
+        XCTAssertEqual(Derive.reclaimBytes(root), outer.size, "no double counting")
+    }
+
+    /// A Ruby `vendor/` beside a `Gemfile` is hand-maintained content, not a
+    /// Bundler artifact — it must stay medium, never lifted to high by the manifest.
+    func testGemfileDoesNotLiftVendorToHigh() throws {
+        let root = try scanTree { base, fm in
+            try fm.createDirectory(at: base.appendingPathComponent("rails/vendor"),
+                                   withIntermediateDirectories: true)
+            try Data("source 'https://rubygems.org'".utf8)
+                .write(to: base.appendingPathComponent("rails/Gemfile"))
+            try Data(count: 4_000).write(to: base.appendingPathComponent("rails/vendor/asset.bin"))
+        }
+        let vendor = find(root, "vendor")
+        XCTAssertEqual(vendor?.reclaim?.confidence, .medium)
+        XCTAssertEqual(vendor?.reclaim?.signal, .knownName)
+    }
+
+    func testInvalidCachedirTagIgnored() throws {
+        let root = try scanTree { base, fm in
+            let dir = base.appendingPathComponent("notes")
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("not a real cache tag".utf8).write(to: dir.appendingPathComponent("CACHEDIR.TAG"))
+            try Data(count: 5_000).write(to: dir.appendingPathComponent("note.txt"))
+        }
+        XCTAssertNil(find(root, "notes")?.reclaim, "a bogus CACHEDIR.TAG must not flag the dir")
     }
 }
 
