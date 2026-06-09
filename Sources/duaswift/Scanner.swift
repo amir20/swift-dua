@@ -1,11 +1,15 @@
 import Foundation
+import Synchronization
 #if canImport(Darwin)
 import Darwin
 #endif
 
 /// Per-worker accumulator. A reference type so each worker can own one slot
-/// and mutate it lock-free (no inout-across-threads).
-final class Accum {
+/// and mutate it lock-free (no inout-across-threads). `@unchecked Sendable`:
+/// each instance is owned by exactly one worker for the duration of a scan
+/// (single-writer invariant), so the `accums` array can cross into
+/// `concurrentPerform` under strict concurrency checking.
+final class Accum: @unchecked Sendable {
     var size: Int64 = 0
     var entries: Int = 0
 }
@@ -29,23 +33,16 @@ func direntName(_ entp: UnsafeMutablePointer<dirent>) -> String {
 /// A parallel, raw-POSIX directory scanner that mirrors `dua aggregate`'s
 /// default semantics: disk usage (allocated blocks), hard-link de-duplication,
 /// symlinks not followed.
-final class DiskScanner {
+final class DiskScanner: Sendable {
     let apparent: Bool
     let countHardLinks: Bool
     let threadCount: Int
     let progress: ProgressCounter?
 
-    /// Shared work-stack of directories left to traverse. `pending` counts dirs
-    /// enqueued-but-not-yet-finished so idle workers know when the scan is done.
-    private let cond = NSCondition()
-    private var dirStack: [String] = []
-    private var pending = 0
-
     /// Hard-link de-dup: only consulted for regular files with > 1 link, so the
     /// lock is essentially uncontended on normal trees.
     private struct INode: Hashable { let dev: Int32; let ino: UInt64 }
-    private let inodeLock = NSLock()
-    private var seen = Set<INode>()
+    private let seen = Mutex(Set<INode>())
 
     init(apparent: Bool, countHardLinks: Bool, threadCount: Int, progress: ProgressCounter? = nil) {
         self.apparent = apparent
@@ -60,9 +57,7 @@ final class DiskScanner {
         let fmt = UInt32(st.st_mode) & UInt32(S_IFMT)
         if !countHardLinks && fmt == UInt32(S_IFREG) && st.st_nlink > 1 {
             let key = INode(dev: st.st_dev, ino: st.st_ino)
-            inodeLock.lock()
-            let isNew = seen.insert(key).inserted
-            inodeLock.unlock()
+            let isNew = seen.withLock { $0.insert(key).inserted }
             if !isNew { return }
         }
         if apparent {
@@ -91,38 +86,21 @@ final class DiskScanner {
         return subdirs
     }
 
-    private func workerLoop(_ acc: Accum) {
-        while true {
-            cond.lock()
-            while dirStack.isEmpty && pending > 0 { cond.wait() }
-            if dirStack.isEmpty {            // pending == 0 → everything is done
-                cond.broadcast()            // wake the other idle workers to exit
-                cond.unlock()
-                break
-            }
-            let dir = dirStack.removeLast()
-            cond.unlock()
-
+    private func workerLoop(_ acc: Accum, _ queue: DirectoryQueue) {
+        while let dir = queue.pop() {
             let beforeEntries = acc.entries
             let beforeSize = acc.size
             let subdirs = processDirectory(dir, into: acc)
             progress?.update(files: acc.entries - beforeEntries,
                              bytes: acc.size - beforeSize,
                              current: dir)
-
-            cond.lock()
-            if !subdirs.isEmpty {
-                dirStack.append(contentsOf: subdirs)
-                pending += subdirs.count
-            }
-            pending -= 1
-            cond.broadcast()
-            cond.unlock()
+            queue.push(subdirs)   // push children before finishing this dir so
+            queue.finishOne()     // `pending` never hits zero prematurely
         }
     }
 
     func scan(_ root: String) -> ScanResult {
-        seen.removeAll(keepingCapacity: true)
+        seen.withLock { $0.removeAll(keepingCapacity: true) }
 
         let rootAccum = Accum()
         var st = stat()
@@ -135,12 +113,10 @@ final class DiskScanner {
             return ScanResult(size: rootAccum.size, entries: rootAccum.entries)
         }
 
-        dirStack = [root]
-        pending = 1
-
+        let queue = DirectoryQueue(root: root)
         let accums = (0..<threadCount).map { _ in Accum() }
         DispatchQueue.concurrentPerform(iterations: threadCount) { idx in
-            self.workerLoop(accums[idx])
+            self.workerLoop(accums[idx], queue)
         }
 
         var total = rootAccum.size

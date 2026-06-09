@@ -1,77 +1,54 @@
 import Foundation
+import Synchronization
 #if canImport(Darwin)
 import Darwin
 #endif
 
 /// Thread-safe running totals updated by scanner workers (once per directory)
 /// and read by the progress monitor.
-final class ProgressCounter {
-    private let lock = NSLock()
-    private var files = 0
-    private var bytes: Int64 = 0
-    private var current = ""
+final class ProgressCounter: Sendable {
+    private struct State {
+        var files = 0
+        var bytes: Int64 = 0
+        var current = ""
+    }
+    private let state = Mutex(State())
 
     func update(files deltaFiles: Int, bytes deltaBytes: Int64, current path: String) {
-        lock.lock()
-        files += deltaFiles
-        bytes += deltaBytes
-        current = path
-        lock.unlock()
+        state.withLock {
+            $0.files += deltaFiles
+            $0.bytes += deltaBytes
+            $0.current = path
+        }
     }
 
     func snapshot() -> (files: Int, bytes: Int64, current: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        return (files, bytes, current)
+        state.withLock { ($0.files, $0.bytes, $0.current) }
     }
 }
 
-/// Renders a single self-updating status line to stderr while a scan runs.
-final class ProgressMonitor {
-    private let counter: ProgressCounter
-    private let interval: useconds_t = 80_000   // 80 ms
-    private let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    private let start = Date()
+/// Pure rendering of a progress snapshot to stderr. Value type so the timer's
+/// @Sendable handler can capture it without capturing the monitor.
+struct ProgressRenderer: Sendable {
+    let counter: ProgressCounter
+    let frames: [String]
+    let start: Date
 
-    private let runLock = NSLock()
-    private var running = true
-    private let finished = DispatchSemaphore(value: 0)
-
-    init(counter: ProgressCounter) { self.counter = counter }
-
-    private func isRunning() -> Bool {
-        runLock.lock(); defer { runLock.unlock() }; return running
-    }
-
-    func begin() {
-        Thread {
-            var tick = 0
-            while self.isRunning() {
-                self.render(tick)
-                tick += 1
-                usleep(self.interval)
-            }
-            self.renderFinal()
-            self.finished.signal()
-        }.start()
-    }
-
-    func finish() {
-        runLock.lock(); running = false; runLock.unlock()
-        finished.wait()   // let the monitor clear/print its final line first
-    }
-
-    private func render(_ tick: Int) {
+    /// Animated in-progress line. Frame is derived from elapsed time so there
+    /// is no mutable counter to capture.
+    func renderTick() {
+        let elapsed = -start.timeIntervalSinceNow
+        let frame = frames[Int(elapsed / 0.08) % frames.count]
         let s = counter.snapshot()
-        let frame = frames[tick % frames.count]
         let line = "\r\u{1b}[K\(frame) scanning… \(grouped(s.files)) files · "
-            + "\(formatMetric(s.bytes)) · \(String(format: "%.1fs", -start.timeIntervalSinceNow))  "
+            + "\(formatMetric(s.bytes)) · \(String(format: "%.1fs", elapsed))  "
             + truncatePath(s.current)
         fputs(line, stderr)
         fflush(stderr)
     }
 
-    private func renderFinal() {
+    /// Final summary line, printed once when the scan ends.
+    func renderFinal() {
         let s = counter.snapshot()
         let line = "\r\u{1b}[K✓ scanned \(grouped(s.files)) files · "
             + "\(formatMetric(s.bytes)) in \(String(format: "%.2fs", -start.timeIntervalSinceNow))\n"
@@ -80,22 +57,48 @@ final class ProgressMonitor {
     }
 }
 
-// MARK: - Small formatting helpers
+/// Renders a single self-updating status line to stderr while a scan runs.
+/// Used single-threaded: `begin()` then `finish()` on the same thread.
+final class ProgressMonitor {
+    private let renderer: ProgressRenderer
+    private let queue = DispatchQueue(label: "duaswift.progress")
+    private var timer: DispatchSourceTimer?
 
-func grouped(_ n: Int) -> String {
-    let digits = String(n)
-    guard n >= 1000 else { return digits }
-    var out = ""
-    var count = 0
-    for ch in digits.reversed() {
-        if count != 0 && count % 3 == 0 { out.append(",") }
-        out.append(ch)
-        count += 1
+    init(counter: ProgressCounter) {
+        renderer = ProgressRenderer(
+            counter: counter,
+            frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+            start: Date()
+        )
     }
-    return String(out.reversed())
+
+    deinit {
+        timer?.cancel()
+    }
+
+    func begin() {
+        guard timer == nil else { return }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now(), repeating: .milliseconds(80))
+        let r = renderer
+        t.setEventHandler { r.renderTick() }
+        timer = t
+        t.resume()
+    }
+
+    func finish() {
+        guard let t = timer else { return }
+        let done = DispatchSemaphore(value: 0)
+        let r = renderer
+        // Cancel handler runs once on `queue` after the last event handler;
+        // it prints the final line and releases finish().
+        t.setCancelHandler {
+            r.renderFinal()
+            done.signal()
+        }
+        t.cancel()
+        done.wait()
+        timer = nil
+    }
 }
 
-func truncatePath(_ path: String, max: Int = 44) -> String {
-    guard path.count > max else { return path }
-    return "…" + path.suffix(max - 1)
-}

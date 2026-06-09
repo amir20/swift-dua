@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & test
+    # The package targets .macOS(.v26) and needs a Swift 6.2+ toolchain
+    # (Xcode 26), so it must run on a macOS 26 runner image.
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Select the latest stable Xcode on the runner. If the default already
+      # provides Swift 6.2+, this is a no-op; pinning avoids surprises when the
+      # image ships multiple Xcodes.
+      - name: Select latest stable Xcode
+        run: |
+          XC="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          swift --version
+
+      - name: Build
+        run: swift build --build-tests -v
+
+      - name: Test
+        run: swift test --skip-build

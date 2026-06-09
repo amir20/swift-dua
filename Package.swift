@@ -1,14 +1,17 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.2
 import PackageDescription
 
 let package = Package(
     name: "ProgressApp",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v26)
     ],
     products: [
         .executable(name: "ProgressApp", targets: ["ProgressApp"]),
         .executable(name: "duaswift", targets: ["duaswift"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
     ],
     targets: [
         .executableTarget(
@@ -17,7 +20,15 @@ let package = Package(
         ),
         .executableTarget(
             name: "duaswift",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
             path: "Sources/duaswift"
+        ),
+        .testTarget(
+            name: "duaswiftTests",
+            dependencies: ["duaswift"],
+            path: "Tests/duaswiftTests"
         ),
         .plugin(
             name: "BundleApp",
