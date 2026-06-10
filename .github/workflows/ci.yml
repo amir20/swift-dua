@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Select the latest stable Xcode on the runner. If the default already
       # provides Swift 6.2+, this is a no-op; pinning avoids surprises when the
@@ -40,7 +40,7 @@ jobs:
     runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Select latest stable Xcode
         run: |
@@ -52,7 +52,7 @@ jobs:
         run: make dmg
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Halo-dmg
           path: Halo.dmg
