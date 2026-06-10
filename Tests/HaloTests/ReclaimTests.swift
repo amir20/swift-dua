@@ -70,6 +70,47 @@ final class ScanModelReclaimTests: XCTestCase {
         model.jump(to: find(root, "app")!)
         XCTAssertEqual(Set(model.reclaimPlan.map(\.name)), ["node_modules", "build"])
     }
+
+    /// alex/.cache[reclaimable]/uv/archive — `uv` is reclaimable only by
+    /// inheritance (`reclaim == nil`). Navigating *into* `uv` must still treat the
+    /// whole folder as a safe target, with the confidence of the enclosing root.
+    private func makeCacheTree() -> DirNode {
+        let archive = DirNode(name: "archive-v0", category: .cache,
+                              reclaim: nil, fileBytes: [.cache: 8 * GB], children: [])
+        let uv = DirNode(name: "uv", category: .cache, reclaim: nil, fileBytes: [:], children: [archive])
+        let cache = DirNode(name: ".cache", category: .cache,
+            reclaim: ReclaimMark(confidence: .medium, signal: .knownName, reason: "known cache directory"),
+            fileBytes: [:], children: [uv])
+        return DirNode(name: "alex", category: .other, reclaim: nil, fileBytes: [:], children: [cache])
+    }
+
+    func testReclaimRecognizedWhenViewingInsideAReclaimRoot() {
+        let model = ScanModel()
+        let root = makeCacheTree()
+        model.load(root, rootPath: "/Users/alex")
+        model.jump(to: find(root, "uv")!)
+
+        XCTAssertEqual(model.current?.name, "uv")
+        XCTAssertEqual(model.reclTotal, find(root, "uv")!.size,
+                       "the whole current folder is reclaimable when inside a reclaim root")
+        XCTAssertEqual(model.reclaimPlan.map(\.name), ["uv"])
+        XCTAssertEqual(model.reclaimPlan.first?.confidence, .medium,
+                       "confidence is inherited from the enclosing .cache root")
+        XCTAssertEqual(model.reclaimPlan.first?.url.path, "/Users/alex/.cache/uv")
+    }
+
+    /// Clicking a breadcrumb navigates to *that* directory, not its parent.
+    /// crumbs = ["Macintosh HD", "~", "Library", "Caches"]; crumb 2 is "Library".
+    func testGoToCrumbLandsOnThatDirectory() {
+        let model = ScanModel()
+        let root = makeTree()
+        model.load(root, rootPath: "/Users/alex")
+        model.jump(to: find(root, "Caches")!)   // path: alex / Library / Caches
+        model.goTo(crumb: 2)
+        XCTAssertEqual(model.current?.name, "Library", "crumb 2 is Library, not its parent")
+        model.goTo(crumb: 1)
+        XCTAssertEqual(model.current?.name, "alex", "crumb 1 is the home root")
+    }
 }
 
 final class ReclaimerTests: XCTestCase {

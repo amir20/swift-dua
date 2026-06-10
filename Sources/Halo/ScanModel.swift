@@ -236,8 +236,16 @@ final class ScanModel {
     private func refresh() {
         segments = computeSegments()
         arcs = computeArcs(segments)
-        reclTotal = current.map(Derive.reclaimBytes) ?? 0
-        reclaimTargets = current.map(Derive.reclaimRoots) ?? []
+        if let cur = current, path.contains(where: \.isReclaimable) {
+            // Viewing inside (or at) a reclaim root: the whole current folder is
+            // purgable — even when its own `reclaim` is nil because the mark lives
+            // on an ancestor. Offer the current folder itself as the target.
+            reclaimTargets = [cur]
+            reclTotal = cur.size
+        } else {
+            reclTotal = current.map(Derive.reclaimBytes) ?? 0
+            reclaimTargets = current.map(Derive.reclaimRoots) ?? []
+        }
         refreshExpandedLocations()
     }
 
@@ -341,13 +349,26 @@ final class ScanModel {
     /// with high-confidence targets pre-selected.
     var reclaimPlan: [ReclaimItem] {
         reclaimTargets.compactMap { node in
-            guard let mark = node.reclaim else { return nil }
+            guard let mark = effectiveMark(for: node) else { return nil }
             return ReclaimItem(id: ObjectIdentifier(node), name: node.name,
                                url: absoluteURL(for: node), size: node.size,
                                confidence: mark.confidence,
                                signalLabel: Self.signalLabel(mark.signal, category: node.category),
                                reason: mark.reason, preselected: mark.confidence == .high)
         }.sorted { $0.size > $1.size }
+    }
+
+    /// The reclaim mark governing `node`: its own, or the nearest reclaimable
+    /// ancestor's (a node inside a reclaim root carries no mark of its own but is
+    /// still purgable under that root's evidence).
+    private func effectiveMark(for node: DirNode) -> ReclaimMark? {
+        if let m = node.reclaim { return m }
+        var p = node.parent
+        while let x = p {
+            if let m = x.reclaim { return m }
+            p = x.parent
+        }
+        return nil
     }
 
     /// Move the chosen targets to the Trash, then rescan and restore the scope.

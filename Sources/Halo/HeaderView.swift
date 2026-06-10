@@ -45,7 +45,7 @@ struct HeaderView: View {
                     .font(.system(size: 13, weight: last ? .semibold : .medium,
                                   design: i > 0 ? .monospaced : .default))
                     .foregroundStyle(last ? Palette.ink : Palette.ink3)
-                    .onTapGesture { if !last && i > 0 { model.goTo(crumb: i - 1) } }
+                    .onTapGesture { if !last && i > 0 { model.goTo(crumb: i) } }
                 if !last {
                     Text("›").font(.system(size: 12)).foregroundStyle(Palette.ink4)
                 }
