@@ -14,7 +14,7 @@ let package = Package(
         // Auto-update. The only external dependency — replacing a running,
         // translocated app bundle in place is exactly the problem Sparkle
         // solves; see https://sparkle-project.org. DiskKit stays dependency-free.
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.0")
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.3")
     ],
     targets: [
         // Disk-scanning model behind the Halo GUI: a classified directory tree
