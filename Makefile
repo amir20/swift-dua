@@ -12,6 +12,11 @@ ICON := Icons/AppIcon.icns
 # (default), or `--key …` flags injected by CI.
 SIGN_IDENTITY  ?=
 export SIGN_IDENTITY
+# App version stamped into Info.plist (CFBundleVersion / ShortVersionString).
+# CI sets it from the release tag (v1.2.3 -> 1.2.3); local builds default to
+# 0.0.0 so a dev bundle never looks newer than a release to Sparkle.
+VERSION        ?=
+export VERSION
 NOTARY_PROFILE ?= halo-notary
 NOTARY_ARGS    ?= --keychain-profile $(NOTARY_PROFILE)
 

@@ -1,11 +1,22 @@
 import SwiftUI
 import AppKit
+import Combine
 import DiskKit
+import Sparkle
 
 @main
 struct HaloApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = ScanModel()
+
+    /// Sparkle auto-updater. Only started when running from a real .app
+    /// bundle — `swift run` and the test runner execute a bare binary that
+    /// Sparkle can't update (no Info.plist feed URL, nothing to replace).
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: Bundle.main.bundleURL.pathExtension == "app",
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     var body: some Scene {
         WindowGroup("Halo") {
@@ -19,6 +30,24 @@ struct HaloApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesButton(updater: updaterController.updater)
+            }
+        }
+    }
+}
+
+/// "Check for Updates…" menu item, disabled while Sparkle can't start a check
+/// (updater not started, or a check is already in flight).
+private struct CheckForUpdatesButton: View {
+    let updater: SPUUpdater
+    @State private var canCheck = false
+
+    var body: some View {
+        Button("Check for Updates…") { updater.checkForUpdates() }
+            .disabled(!canCheck)
+            .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheck = $0 }
     }
 }
 

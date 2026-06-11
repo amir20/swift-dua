@@ -108,15 +108,48 @@ jobs:
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
           echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/key.p8"
-          make notarize NOTARY_ARGS="--key $RUNNER_TEMP/key.p8 --key-id $NOTARY_KEY_ID --issuer $NOTARY_ISSUER_ID"
+          make notarize VERSION="${GITHUB_REF_NAME#v}" NOTARY_ARGS="--key $RUNNER_TEMP/key.p8 --key-id $NOTARY_KEY_ID --issuer $NOTARY_ISSUER_ID"
           rm -f "$RUNNER_TEMP/key.p8"
 
-      # Publish the notarized DMG as a GitHub Release asset — the stable URL
-      # the Homebrew cask downloads from.
+      # Sparkle appcast: EdDSA-sign the DMG and write the single-item feed.
+      # Installed apps poll the stable releases/latest/download/appcast.xml
+      # URL, so attaching the feed to each release keeps it always current —
+      # no separate hosting. sign_update ships inside the Sparkle SPM artifact
+      # fetched by the build above.
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SIGN_UPDATE="$(find .build/artifacts -type f -name sign_update | head -1)"
+          ATTRS="$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - Halo.dmg)"
+          cat > appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Halo</title>
+              <item>
+                <title>Halo $VERSION</title>
+                <link>https://github.com/amir20/Halo.app/releases/tag/$GITHUB_REF_NAME</link>
+                <sparkle:version>$VERSION</sparkle:version>
+                <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+                <enclosure
+                  url="https://github.com/amir20/Halo.app/releases/download/$GITHUB_REF_NAME/Halo.dmg"
+                  $ATTRS
+                  type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          EOF
+          cat appcast.xml
+
+      # Publish the notarized DMG + appcast as GitHub Release assets — the
+      # stable URLs the Homebrew cask and Sparkle download from.
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" Halo.dmg \
+          gh release create "$GITHUB_REF_NAME" Halo.dmg appcast.xml \
             --title "Halo $GITHUB_REF_NAME" \
             --generate-notes

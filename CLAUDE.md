@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Halo** — a native SwiftUI disk-space visualizer for macOS. It scans a directory tree, classifies what's using space, and renders an interactive donut with two lenses (**by folder** / **by type**) plus a synced breakdown sidebar. Built on **DiskKit**, a small library that does the parallel filesystem walk and builds a classified tree.
 
-Pure SwiftPM package, **no external dependencies**. Targets **macOS 26+ / Swift 6.2 (Xcode 26)** and builds in **Swift 6 language mode with strict data-race checking**.
+Pure SwiftPM package with exactly **one external dependency: Sparkle** (auto-update), linked into the Halo target only — DiskKit has none. Targets **macOS 26+ / Swift 6.2 (Xcode 26)** and builds in **Swift 6 language mode with strict data-race checking**.
 
 ## Commands
 
@@ -29,7 +29,9 @@ swift test --filter HaloTests.ScanModelTests/testDonutHoverHitsTheArcUnderTheCur
 swift test --filter DiskKitTests          # whole target
 ```
 
-The app bundle is produced by the `bundle-app` **package plugin** (not a script): `make app` runs `swift package --disable-sandbox --allow-writing-to-package-directory bundle-app Halo`. The plugin builds release, writes a **binary** `Info.plist` via `PropertyListSerialization`, copies `Icons/AppIcon.icns`, and ad-hoc signs. CI (`.github/workflows/ci.yml`, macos-26 runner) builds + tests and uploads `Halo.dmg` as an artifact on every push/PR.
+The app bundle is produced by the `bundle-app` **package plugin** (not a script): `make app` runs `swift package --disable-sandbox --allow-writing-to-package-directory bundle-app Halo`. The plugin builds release, writes a **binary** `Info.plist` via `PropertyListSerialization` (stamping `VERSION`, default `0.0.0`, plus Sparkle's `SUFeedURL`/`SUPublicEDKey`), copies `Icons/AppIcon.icns`, embeds `Sparkle.framework` into `Contents/Frameworks` (adding the `@executable_path/../Frameworks` rpath), **re-signs Sparkle's nested XPC services/Autoupdate/Updater.app deepest-first** (library validation under the hardened runtime requires nested code signed by our team), then signs the app. CI (`.github/workflows/ci.yml`, macos-26 runner) builds + tests and uploads `Halo.dmg` as an artifact on every push/PR.
+
+**Auto-update (Sparkle).** Installed apps poll `SUFeedURL` = `https://github.com/amir20/Halo.app/releases/latest/download/appcast.xml`. The CI `release` job (on `v*` tags) EdDSA-signs the notarized DMG with `sign_update` (key from the `SPARKLE_PRIVATE_KEY` secret; tools ship inside the Sparkle SPM artifact under `.build/artifacts/sparkle/Sparkle/bin/`) and attaches a single-item `appcast.xml` to the release — `releases/latest/download/` keeps the feed current with no hosting. The updater only starts when running from a real `.app` bundle, so `swift run`/tests are unaffected.
 
 > The GUI is a SwiftUI `App`, so it can't be smoke-tested headlessly here — hover/visual behavior must be verified by a human running the app. Logic that *can* be tested lives in `HaloTests` (the executable target is `@testable`-importable).
 
