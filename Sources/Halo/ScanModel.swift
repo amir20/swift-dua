@@ -206,7 +206,10 @@ final class ScanModel {
         ringDelayTimer?.invalidate(); ringDelayTimer = nil
     }
 
-    private func installRoot(_ node: DirNode) {
+    // The three scan-event handlers below are internal (not private) so tests
+    // can drive a streaming scan's event sequence deterministically.
+
+    func installRoot(_ node: DirNode) {
         rootName = node.name
         rootCategory = node.category
         rootReclaim = node.reclaim
@@ -218,7 +221,7 @@ final class ScanModel {
         sweepKey += 1
     }
 
-    private func applyChild(_ index: Int, _ node: DirNode) {
+    func applyChild(_ index: Int, _ node: DirNode) {
         guard index < liveChildren.count else { return }
         liveChildren[index] = node
         // Only restitch the root view while the user is still at the top level.
@@ -230,7 +233,7 @@ final class ScanModel {
         }
     }
 
-    private func finishScan() {
+    func finishScan() {
         pollTimer?.invalidate(); pollTimer = nil
         ringDelayTimer?.invalidate(); ringDelayTimer = nil
         if let s = progress?.snapshot() {
@@ -238,9 +241,15 @@ final class ScanModel {
             liveBytes = s.bytes
             skippedDirs = s.skipped
         }
-        if path.count == 1, let rebuilt = rebuildRoot() {
+        // Always restitch on completion: `applyChild` stops rebuilding while the
+        // user is drilled in, so without this the root would freeze at the last
+        // top-level restitch and show stale placeholders after navigating back.
+        // The drilled-into subtrees are shared instances, so the path re-resolves
+        // into the rebuilt tree by name without losing the user's scope.
+        if root != nil, let rebuilt = rebuildRoot() {
+            let names = path.dropFirst().map(\.name)
             root = rebuilt
-            path = [rebuilt]
+            path = Self.resolvePath(from: rebuilt, names: names)
         }
         // An empty tree from a root we can't read is an error, not a clean
         // result — say so instead of presenting a silent empty donut.
