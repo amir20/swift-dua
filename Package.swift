@@ -10,6 +10,12 @@ let package = Package(
         .executable(name: "Halo", targets: ["Halo"]),
         .library(name: "DiskKit", targets: ["DiskKit"])
     ],
+    dependencies: [
+        // Auto-update. The only external dependency — replacing a running,
+        // translocated app bundle in place is exactly the problem Sparkle
+        // solves; see https://sparkle-project.org. DiskKit stays dependency-free.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.0")
+    ],
     targets: [
         // Disk-scanning model behind the Halo GUI: a classified directory tree
         // built from a real, parallel filesystem walk.
@@ -20,7 +26,10 @@ let package = Package(
         // "Halo" — a SwiftUI donut disk visualizer built on DiskKit.
         .executableTarget(
             name: "Halo",
-            dependencies: ["DiskKit"],
+            dependencies: [
+                "DiskKit",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/Halo"
         ),
         .testTarget(
