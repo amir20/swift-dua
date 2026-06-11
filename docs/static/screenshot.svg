@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 740" font-family="-apple-system, system-ui, sans-serif">
+  <!-- Placeholder mock of the Halo window. Replace this file with a real
+       dark-mode screenshot (screenshot.webp/png) before launch. -->
+  <rect width="1200" height="740" fill="oklch(0.17 0.005 75)"/>
+
+  <!-- Sidebar -->
+  <rect x="0" y="0" width="340" height="740" fill="oklch(0.205 0.005 75)"/>
+  <text x="28" y="48" font-size="13" font-weight="600" letter-spacing="2" fill="oklch(0.6 0.005 80)">BREAKDOWN</text>
+  <g font-size="15">
+    <circle cx="36" cy="92" r="6" fill="oklch(0.72 0.125 35)"/>
+    <text x="54" y="97" fill="oklch(0.93 0.006 80)">Library</text>
+    <text x="312" y="97" fill="oklch(0.6 0.005 80)" text-anchor="end">142 GB</text>
+    <rect x="28" y="110" width="284" height="4" rx="2" fill="oklch(0.26 0.004 80)"/>
+    <rect x="28" y="110" width="200" height="4" rx="2" fill="oklch(0.72 0.125 35)"/>
+
+    <circle cx="36" cy="152" r="6" fill="oklch(0.72 0.125 172.5)"/>
+    <text x="54" y="157" fill="oklch(0.93 0.006 80)">Movies</text>
+    <text x="312" y="157" fill="oklch(0.6 0.005 80)" text-anchor="end">96 GB</text>
+    <rect x="28" y="170" width="284" height="4" rx="2" fill="oklch(0.26 0.004 80)"/>
+    <rect x="28" y="170" width="136" height="4" rx="2" fill="oklch(0.72 0.125 172.5)"/>
+
+    <circle cx="36" cy="212" r="6" fill="oklch(0.72 0.125 310)"/>
+    <text x="54" y="217" fill="oklch(0.93 0.006 80)">Workspace</text>
+    <text x="312" y="217" fill="oklch(0.6 0.005 80)" text-anchor="end">71 GB</text>
+    <rect x="28" y="230" width="284" height="4" rx="2" fill="oklch(0.26 0.004 80)"/>
+    <rect x="28" y="230" width="100" height="4" rx="2" fill="oklch(0.72 0.125 310)"/>
+
+    <circle cx="36" cy="272" r="6" fill="oklch(0.72 0.125 87.5)"/>
+    <text x="54" y="277" fill="oklch(0.93 0.006 80)">Pictures</text>
+    <text x="312" y="277" fill="oklch(0.6 0.005 80)" text-anchor="end">54 GB</text>
+    <rect x="28" y="290" width="284" height="4" rx="2" fill="oklch(0.26 0.004 80)"/>
+    <rect x="28" y="290" width="76" height="4" rx="2" fill="oklch(0.72 0.125 87.5)"/>
+
+    <circle cx="36" cy="332" r="6" fill="oklch(0.72 0.125 225)"/>
+    <text x="54" y="337" fill="oklch(0.93 0.006 80)">Music</text>
+    <text x="312" y="337" fill="oklch(0.6 0.005 80)" text-anchor="end">38 GB</text>
+    <rect x="28" y="350" width="284" height="4" rx="2" fill="oklch(0.26 0.004 80)"/>
+    <rect x="28" y="350" width="54" height="4" rx="2" fill="oklch(0.72 0.125 225)"/>
+  </g>
+
+  <!-- Reclaim chip -->
+  <rect x="28" y="660" width="284" height="48" rx="12" fill="oklch(0.74 0.16 58 / 0.15)" stroke="oklch(0.74 0.16 58 / 0.4)"/>
+  <text x="170" y="689" font-size="15" font-weight="600" fill="oklch(0.74 0.16 58)" text-anchor="middle">Reclaim 23.4 GB</text>
+
+  <!-- Donut -->
+  <g transform="rotate(-90 770 370)" stroke-width="64" fill="none">
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 35)"    stroke-dasharray="390 1319.5"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 172.5)" stroke-dasharray="218 1319.5" stroke-dashoffset="-396"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 310)"   stroke-dasharray="152 1319.5" stroke-dashoffset="-620"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 87.5)"  stroke-dasharray="112 1319.5" stroke-dashoffset="-778"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 225)"   stroke-dasharray="86 1319.5"  stroke-dashoffset="-896"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 2.5)"   stroke-dasharray="60 1319.5"  stroke-dashoffset="-988"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.72 0.125 140)"   stroke-dasharray="46 1319.5"  stroke-dashoffset="-1054"/>
+    <circle cx="770" cy="370" r="210" stroke="oklch(0.62 0.02 75)"     stroke-dasharray="207 1319.5" stroke-dashoffset="-1106"/>
+  </g>
+  <text x="770" y="362" font-size="56" font-weight="200" fill="oklch(0.93 0.006 80)" text-anchor="middle">482 GB</text>
+  <text x="770" y="398" font-size="17" fill="oklch(0.6 0.005 80)" text-anchor="middle">Macintosh HD</text>
+</svg>

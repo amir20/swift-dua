@@ -1,0 +1,143 @@
+/*
+ * halodisk.app design system — dark-only.
+ * Color tokens are ported verbatim from the app's Sources/Halo/Palette.swift
+ * (dark-appearance oklch values), so the site is pixel-faithful to the app.
+ */
+
+:root {
+  /* Ink — Palette.ink…ink4 (dark) */
+  --ink: oklch(0.93 0.006 80);
+  --ink2: oklch(0.76 0.006 80);
+  --ink3: oklch(0.6 0.005 80);
+  --ink4: oklch(0.48 0.005 80);
+
+  /* Surfaces — hero void is the app's dark bg pushed deeper */
+  --void: oklch(0.12 0.005 75);
+  --bg: oklch(0.17 0.005 75);
+  --bg2: oklch(0.205 0.005 75);
+
+  /* Accents — Palette.reclaim / Palette.progress (dark) */
+  --reclaim: oklch(0.74 0.16 58);
+  --reclaim-bright: oklch(0.8 0.17 58);
+  --progress: oklch(0.7 0.17 256);
+
+  /* Glass */
+  --glass-bg: oklch(0.25 0.006 75 / 0.35);
+  --glass-line: oklch(1 0 0 / 0.12);
+  --glass-highlight: oklch(1 0 0 / 0.18);
+  --radius: 22px;
+
+  /* Motion tokens */
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 240ms;
+  --dur-4: 300ms;
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue',
+    system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--void);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: oklch(0.74 0.16 58 / 0.35);
+}
+
+/* ---- shared building blocks ---- */
+
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--glass-line);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 24px 64px oklch(0 0 0 / 0.35);
+}
+
+/* Browsers without backdrop-filter get a solid legible surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: oklch(0.22 0.006 75 / 0.96);
+  }
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--reclaim);
+}
+
+/* ---- scroll reveal (used with the `reveal` action) ----
+   The hidden state is only applied once JS adds .reveal-armed,
+   so content is fully visible when JS is disabled. */
+
+.reveal-armed {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.reveal-shown {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 700ms var(--ease-out-quart),
+    transform 700ms var(--ease-out-quart);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal-armed {
+    opacity: 1;
+    transform: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
