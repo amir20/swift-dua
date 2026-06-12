@@ -55,7 +55,9 @@ public enum TreeScanner {
     {
         let rootName = (rootPath as NSString).lastPathComponent
         let root = BuildNode(name: rootName, path: rootPath, inherited: nil, hint: .none)
-        drain(NodeQueue([root]), context: ScanContext(progress: progress, rootPath: rootPath))
+        drain(
+            NodeQueue([root], progress: progress),
+            context: ScanContext(progress: progress, rootPath: rootPath))
         return freeze(root)
     }
 
@@ -84,6 +86,10 @@ public enum TreeScanner {
 
         let tops = root.children
         for (i, t) in tops.enumerated() { t.rootIndex = i }
+        // The top-level subtree count is the progress denominator's anchor: as
+        // each one completes, `fractionDone()` contracts the volume-wide estimate
+        // toward the real scanned total (see `ScanProgress`).
+        context.progress.setTotalSubtrees(tops.count)
 
         // Placeholders are size-0 and filtered out of the UI, so their (not-yet-
         // computed) classification is irrelevant — never reclaimable.
@@ -109,10 +115,13 @@ public enum TreeScanner {
         // so it never outlives this call — `withoutActuallyEscaping` lets the
         // tracker hold it without forcing the public API to be `@escaping`.
         withoutActuallyEscaping(onChild) { onChild in
-            let tracker = SubtreeTracker(count: tops.count) { i in onChild(i, freeze(tops[i])) }
+            let tracker = SubtreeTracker(count: tops.count) { i in
+                context.progress.addCompletedSubtree()
+                onChild(i, freeze(tops[i]))
+            }
             for t in tops { tracker.enter(t.rootIndex) }  // the top node itself
 
-            let queue = NodeQueue(tops)
+            let queue = NodeQueue(tops, progress: context.progress)
             token?.onCancel { queue.cancel() }
             DispatchQueue.concurrentPerform(iterations: workerCount) { _ in
                 while let node = queue.pop() {
@@ -301,6 +310,20 @@ private final class ScanContext: Sendable {
         self.progress = progress
         var st = stat()
         self.rootDev = rootPath.withCString { stat($0, &st) } == 0 ? st.st_dev : 0
+        // Seed the progress denominator from the volume's used inode/byte counts.
+        // The walk covers a subset of the volume (a subtree, hard links once, no
+        // crossing mounts), so the estimate undershoots — corrected to 100% by
+        // the caller when the walk finishes.
+        var fs = statfs()
+        if rootPath.withCString({ statfs($0, &fs) }) == 0 {
+            // Subtract in signed space: f_blocks/f_bfree are UInt64, so an
+            // inconsistent statfs (f_bfree > f_blocks, seen on some network
+            // filesystems) would wrap and then trap in Int64(). The inode line
+            // is already safe for the same reason.
+            let usedInodes = Int64(fs.f_files) - Int64(fs.f_ffree)
+            let usedBytes = (Int64(fs.f_blocks) - Int64(fs.f_bfree)) * Int64(fs.f_bsize)
+            progress.setDenominator(entries: max(0, usedInodes), bytes: max(0, usedBytes))
+        }
     }
 
     /// True the first time this inode is seen in the scan — count it then only.
@@ -362,10 +385,14 @@ private final class NodeQueue: @unchecked Sendable {
     private var stack: [BuildNode]
     private var pending: Int
     private var cancelled = false
+    /// Feeds the directory half of the progress numerator: `finishOne` reports
+    /// each listed directory, at the same point it decrements `pending`.
+    private let progress: ScanProgress?
 
-    init(_ roots: [BuildNode]) {
+    init(_ roots: [BuildNode], progress: ScanProgress? = nil) {
         stack = roots
         pending = roots.count
+        self.progress = progress
     }
 
     /// Blocks until a node is available, or returns `nil` once the scan is
@@ -406,6 +433,7 @@ private final class NodeQueue: @unchecked Sendable {
         pending -= 1
         if pending == 0 { cond.broadcast() }
         cond.unlock()
+        progress?.addDir()
     }
 }
 

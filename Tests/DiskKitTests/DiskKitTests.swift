@@ -575,3 +575,85 @@ final class TreeScannerTests: XCTestCase {
         XCTAssertEqual(Derive.typeSizes(streamed)[.deps], Derive.typeSizes(blocking)[.deps])
     }
 }
+
+final class ScanProgressTests: XCTestCase {
+    func testFractionIsZeroBeforeADenominatorIsSet() {
+        let p = ScanProgress()
+        XCTAssertEqual(p.fractionDone(), 0, "no denominator yet → 0, never NaN")
+        p.add(files: 3, bytes: 100)
+        p.addDir()
+        XCTAssertEqual(p.fractionDone(), 0, "still 0 without a denominator")
+    }
+
+    func testFractionIsEntriesOverUsedInodes() {
+        let p = ScanProgress()
+        p.setDenominator(entries: 100, bytes: 1_000_000)
+        p.add(files: 20, bytes: 5_000)
+        p.addDir()
+        p.addDir()  // 22 entries / 100
+        XCTAssertEqual(p.fractionDone(), 0.22, accuracy: 1e-9)
+    }
+
+    func testFractionFallsBackToBytesWithoutAnInodeCount() {
+        let p = ScanProgress()
+        p.setDenominator(entries: 0, bytes: 1_000)  // volume reported no usable inodes
+        p.add(files: 1, bytes: 500)
+        XCTAssertEqual(p.fractionDone(), 0.5, accuracy: 1e-9)
+    }
+
+    func testFractionIsMonotonicAndNeverGoesBackward() {
+        let p = ScanProgress()
+        p.setDenominator(entries: 100, bytes: 1_000_000)
+        p.add(files: 40, bytes: 1)
+        XCTAssertEqual(p.fractionDone(), 0.40, accuracy: 1e-9)
+        // A denominator correction can't drag the bar backward.
+        p.setDenominator(entries: 1_000, bytes: 1_000_000)
+        XCTAssertEqual(p.fractionDone(), 0.40, accuracy: 1e-9, "holds, never lurches back")
+    }
+
+    func testFractionIsCappedBelowOneUntilTheCallerSnapsIt() {
+        let p = ScanProgress()
+        p.setDenominator(entries: 10, bytes: 100)
+        p.add(files: 10, bytes: 100)  // numerator == denominator
+        XCTAssertEqual(p.fractionDone(), 0.99, accuracy: 1e-9, "never shows full mid-scan")
+    }
+
+    func testDenominatorContractsAsSubtreesComplete() {
+        // Volume holds 100 inodes; the scan covers a subtree of 80 across 4 top-
+        // level subtrees, so raw entries/volume would top out at 0.80.
+        let p = ScanProgress()
+        p.setDenominator(entries: 100, bytes: 1)
+        p.setTotalSubtrees(4)
+
+        // Nothing complete yet → full-volume denominator, no overshoot.
+        p.add(files: 30, bytes: 0)
+        XCTAssertEqual(p.fractionDone(), 0.30, accuracy: 1e-9, "30 / 100 while w = 0")
+
+        // Half the subtrees done (w = 0.5): denom = 30 + (100−30)·0.5 = 65.
+        p.addCompletedSubtree()
+        p.addCompletedSubtree()
+        XCTAssertEqual(p.fractionDone(), 30.0 / 65.0, accuracy: 1e-9)
+
+        // Three of four done (w = 0.75), more scanned: denom = 60 + (100−60)·0.25 = 70.
+        p.add(files: 30, bytes: 0)  // scanned now 60
+        p.addCompletedSubtree()
+        XCTAssertEqual(p.fractionDone(), 60.0 / 70.0, accuracy: 1e-9)
+
+        // All subtrees done (w = 1): denom contracts to the scanned total → full,
+        // capped just below 1 until the caller snaps it.
+        p.add(files: 20, bytes: 0)  // scanned now 80 (the subtree's real total)
+        p.addCompletedSubtree()
+        XCTAssertEqual(p.fractionDone(), 0.99, accuracy: 1e-9, "reaches ~100% on its own")
+    }
+
+    func testContractingDenominatorStaysMonotonicThroughASubtreeStep() {
+        // A subtree completing must never drop the bar — it can only pull it up.
+        let p = ScanProgress()
+        p.setDenominator(entries: 1_000, bytes: 1)
+        p.setTotalSubtrees(10)
+        p.add(files: 100, bytes: 0)
+        let before = p.fractionDone()
+        p.addCompletedSubtree()  // w steps 0 → 0.1, denominator shrinks
+        XCTAssertGreaterThanOrEqual(p.fractionDone(), before)
+    }
+}

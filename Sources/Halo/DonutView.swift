@@ -11,10 +11,9 @@ struct DonutView: View {
     private let r1: CGFloat = 196  // outer
     private let rc0: CGFloat = 200  // amber inner
     private let rc1: CGFloat = 207  // amber outer
-    private let ringRadius: CGFloat = 115  // activity ring radius (hugs the hole edge)
+    private let ringRadius: CGFloat = 115  // progress ring radius (hugs the hole edge)
     private let ringWidth: CGFloat = 5
-    private let ringArc: CGFloat = 0.18  // fraction of the circle the comet covers
-    private let ringPeriod: Double = 1.15  // seconds per revolution
+    private let ringArc: CGFloat = 0.02  // minimum fill, so early progress shows a nub
 
     var body: some View {
         ZStack {
@@ -112,30 +111,27 @@ struct DonutView: View {
         .accessibilityAction { model.tapSegment(arc.seg) }
     }
 
-    /// Indeterminate "scanning" indicator: a short blue arc hugging the inside of
-    /// the donut, rotating continuously while a scan runs. A true percentage can't
-    /// be shown honestly mid-scan — the total isn't known until the walk finishes
-    /// — so this conveys *activity* without claiming progress; the live byte/file
-    /// counter in the hole carries the real "how far" signal. `showRing` gates it
-    /// behind a short delay so quick scans never flash it.
+    /// Determinate "scanning" indicator: a blue arc hugging the inside of the
+    /// donut that fills clockwise from 12 o'clock as the walk progresses. The
+    /// exact byte total isn't known until the scan ends, so the fill tracks
+    /// `scanFraction` — the share of *discovered* directories already listed,
+    /// clamped so it only ever advances. `showRing` gates it behind a short
+    /// delay so quick scans never flash it; the live byte/file counter in the
+    /// hole carries the concrete "how much so far" signal.
     @ViewBuilder
     private var progressRing: some View {
         if model.showRing {
-            TimelineView(.animation) { ctx in
-                let turn =
-                    ctx.date.timeIntervalSinceReferenceDate
-                    .truncatingRemainder(dividingBy: ringPeriod) / ringPeriod
-                Circle()
-                    .trim(from: 0, to: ringArc)
-                    .stroke(
-                        Palette.progress,
-                        style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
-                    )
-                    .frame(width: ringRadius * 2, height: ringRadius * 2)
-                    .rotationEffect(.radians(turn * 2 * .pi))
-            }
-            .transition(.opacity)
-            .allowsHitTesting(false)
+            Circle()
+                .trim(from: 0, to: max(ringArc, CGFloat(model.scanFraction)))
+                .stroke(
+                    Palette.progress,
+                    style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
+                )
+                .frame(width: ringRadius * 2, height: ringRadius * 2)
+                .rotationEffect(.degrees(-90))  // start the fill at 12 o'clock
+                .animation(.easeOut(duration: 0.3), value: model.scanFraction)
+                .transition(.opacity)
+                .allowsHitTesting(false)
         }
     }
 

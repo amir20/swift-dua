@@ -96,6 +96,11 @@ final class ScanModel {
     /// Whether to surface the Full Disk Access banner: only when access is missing
     /// and the user hasn't waved it away.
     var showFDABanner: Bool { !fullDiskAccess && !fdaBannerDismissed }
+    /// Monotonic scan progress estimate in 0...1. Drives the determinate progress
+    /// ring and the Dock-icon bar. The walk's true size isn't known until it ends,
+    /// so this is an estimate (see `ScanProgress.fractionDone`) — but it only ever
+    /// moves forward.
+    private(set) var scanFraction: Double = 0
     /// Drives the reclaim confirmation sheet.
     var showReclaimSheet = false
     /// Result of the most recent reclaim, for a brief footer note.
@@ -154,6 +159,7 @@ final class ScanModel {
         liveBytes = 0
         skippedDirs = 0
         showRing = false
+        scanFraction = 0
         // Don't carry a prior reclaim's footer note into an unrelated scan; a
         // post-reclaim rescan re-applies it from `pendingReclaim` in finishScan.
         lastReclaim = nil
@@ -173,6 +179,10 @@ final class ScanModel {
                 self.liveFiles = s.files
                 self.liveBytes = s.bytes
                 self.skippedDirs = s.skipped
+                self.scanFraction = prog.fractionDone()
+                // Show the Dock bar only once the ring is up, so a quick scan
+                // never flashes the icon; cleared in finishScan / supersede.
+                if self.showRing { DockProgress.shared.fraction = self.scanFraction }
             }
         }
         let token = ScanToken()
@@ -224,6 +234,7 @@ final class ScanModel {
         pollTimer = nil
         ringDelayTimer?.invalidate()
         ringDelayTimer = nil
+        DockProgress.shared.fraction = nil  // a superseded scan leaves no bar
     }
 
     // The three scan-event handlers below are internal (not private) so tests
@@ -291,6 +302,8 @@ final class ScanModel {
             lastReclaim = outcome
         }
         scanning = false
+        scanFraction = 1
+        DockProgress.shared.fraction = nil  // walk done — restore the plain icon
         // Fade the activity ring out as the real wedges take over.
         withAnimation(.easeOut(duration: 0.4)) { showRing = false }
         refresh()
