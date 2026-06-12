@@ -87,6 +87,15 @@ final class ScanModel {
     /// Whether the scanning activity ring is shown. Gated behind a short delay so
     /// a fast scan never flashes it.
     var showRing = false
+    /// Whether the app holds Full Disk Access. Re-probed when the app becomes
+    /// active. When false, the scan can't see inside other apps' data and macOS
+    /// nags once per app, so a banner offers to grant it.
+    var fullDiskAccess = FullDiskAccess.isGranted
+    /// Set when the user dismisses the Full Disk Access banner this session.
+    var fdaBannerDismissed = false
+    /// Whether to surface the Full Disk Access banner: only when access is missing
+    /// and the user hasn't waved it away.
+    var showFDABanner: Bool { !fullDiskAccess && !fdaBannerDismissed }
     /// Drives the reclaim confirmation sheet.
     var showReclaimSheet = false
     /// Result of the most recent reclaim, for a brief footer note.
@@ -467,6 +476,46 @@ final class ScanModel {
     /// anything Finder doesn't treat as a plain folder).
     func openInFinder() {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: currentURL.path)
+    }
+
+    // MARK: - Full Disk Access
+
+    /// Re-probe Full Disk Access — called when the app reactivates, e.g. after
+    /// the user visits System Settings to grant it. On a denied→granted
+    /// transition, rescan so the dirs the walk had to skip fill in.
+    ///
+    /// The probe (`open()`) runs on a background thread so the main actor is
+    /// never blocked. The animation for the banner fade-out is applied here,
+    /// after the probe completes, so the caller doesn't need a `withAnimation`
+    /// wrapper. The rescan is deferred past the animation transaction via `Task`
+    /// so scan-state resets (`scanning = true`, `showRing = false`, …) aren't
+    /// caught by the easeOut curve.
+    func refreshFullDiskAccess() {
+        let wasDenied = !fullDiskAccess
+        Task.detached(priority: .utility) {
+            let granted = FullDiskAccess.isGranted
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    self.fullDiskAccess = granted
+                }
+                if granted && wasDenied {
+                    self.fdaBannerDismissed = false
+                    if !self.scanRootPath.isEmpty {
+                        Task { self.rescan() }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Opens the Full Disk Access settings pane so the user can add Halo.
+    func openFullDiskAccessSettings() {
+        FullDiskAccess.openSettings()
+    }
+
+    /// Hides the Full Disk Access banner for the rest of this session.
+    func dismissFDABanner() {
+        fdaBannerDismissed = true
     }
 
     // MARK: - Reclaim

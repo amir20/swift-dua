@@ -1,3 +1,4 @@
+import AppKit
 import DiskKit
 import SwiftUI
 
@@ -7,6 +8,10 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             HeaderView(model: model)
+            if model.showFDABanner {
+                FDABanner(model: model)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             HStack(spacing: 0) {
                 stage
                 RailView(model: model)
@@ -14,6 +19,13 @@ struct ContentView: View {
         }
         .background(Palette.bg)
         .frame(minWidth: 980, minHeight: 660)
+        // Re-probe Full Disk Access whenever the app comes forward — the user may
+        // have just granted it in System Settings — and animate the banner away.
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            model.refreshFullDiskAccess()
+        }
     }
 
     private var stage: some View {
