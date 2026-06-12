@@ -163,31 +163,38 @@ a {
   color: var(--reclaim);
 }
 
-/* ---- scroll reveal (used with the `reveal` action) ----
-   The hidden state is only applied once JS adds .reveal-armed,
-   so content is fully visible when JS is disabled. */
+/* ---- scroll reveal ----
+   Pure CSS: elements fade/rise as they scroll into view on a view() timeline.
+   Browsers without scroll-driven animations (and no-JS visitors) just see
+   everything — the hidden state only exists inside the keyframes. Siblings in
+   the same row stagger via --reveal-stagger (set inline per element), which
+   shifts each one's animation-range, since time-based delays don't apply to
+   scroll timelines. Gated on prefers-reduced-motion explicitly because the
+   global animation-duration override below can't neutralize a scroll-driven
+   animation. */
 
-.reveal-armed {
-  opacity: 0;
-  transform: translateY(24px);
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-in linear both;
+      animation-timeline: view();
+      animation-range:
+        entry calc(var(--reveal-stagger, 0) * 8%)
+        entry calc(55% + var(--reveal-stagger, 0) * 8%);
+    }
+  }
 }
 
-.reveal-shown {
-  opacity: 1;
-  transform: translateY(0);
-  transition:
-    opacity 700ms var(--ease-out-quart),
-    transform 700ms var(--ease-out-quart);
-  transition-delay: var(--reveal-delay, 0ms);
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
-  }
-  .reveal-armed {
-    opacity: 1;
-    transform: none;
   }
   *,
   *::before,

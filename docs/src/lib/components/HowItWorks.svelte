@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { reveal } from '$lib/actions/reveal';
-
   const BEATS = [
     {
       n: '01',
@@ -22,8 +20,8 @@
 
 <section class="how" id="how">
   <div class="wrap">
-    <p class="label" use:reveal>How it works</p>
-    <h2 use:reveal={{ delay: 80 }}>Scan. Hover. Reclaim.</h2>
+    <p class="label reveal">How it works</p>
+    <h2 class="reveal">Scan. Hover. Reclaim.</h2>
 
     <div class="stage">
       <!-- The screenshot straightens from a 3D tilt as it scrolls through view.
@@ -44,7 +42,7 @@
 
       <ol class="beats">
         {#each BEATS as beat, i}
-          <li use:reveal={{ delay: i * 120 }}>
+          <li class="reveal" style:--reveal-stagger={i}>
             <span class="n">{beat.n}</span>
             <div>
               <h3>{beat.title}</h3>

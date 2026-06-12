@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { reveal } from '$lib/actions/reveal';
-
   const FAQ = [
     {
       q: 'What does it need?',
@@ -21,7 +19,7 @@
   <div class="wrap">
     <div class="faq">
       {#each FAQ as item, i}
-        <div class="qa" use:reveal={{ delay: i * 100 }}>
+        <div class="qa reveal" style:--reveal-stagger={i}>
           <h3>{item.q}</h3>
           <p>{item.a}</p>
         </div>
