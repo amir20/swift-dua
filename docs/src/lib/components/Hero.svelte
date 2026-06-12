@@ -50,7 +50,7 @@
     min-height: 100svh;
     display: grid;
     place-items: center;
-    background: radial-gradient(ellipse 90% 70% at 50% 30%, var(--void) 0%, oklch(0.09 0.004 75) 100%);
+    background: radial-gradient(ellipse 90% 70% at 50% 30%, var(--void) 0%, var(--void-edge) 100%);
     padding: 64px 24px 96px;
   }
 
@@ -137,7 +137,7 @@
     font-weight: 600;
     text-decoration: none;
     box-shadow:
-      0 0 0 1px oklch(1 0 0 / 0.08),
+      0 0 0 1px var(--glass-line),
       0 8px 32px oklch(0.74 0.16 58 / 0.35);
     transition:
       background 150ms ease,
@@ -149,7 +149,7 @@
     .download:hover {
       background: var(--reclaim-bright);
       box-shadow:
-        0 0 0 1px oklch(1 0 0 / 0.12),
+        0 0 0 1px var(--glass-line),
         0 10px 40px oklch(0.74 0.16 58 / 0.5);
     }
   }

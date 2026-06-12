@@ -28,13 +28,18 @@
       {/each}
     </div>
 
-    <div class="base" use:reveal>
+    <div class="base">
       <p class="made">
         Made by <a href="https://github.com/amir20" target="_blank" rel="noopener">Amir Raminfar</a>
         · <a href="https://github.com/amir20/Halo.app" target="_blank" rel="noopener">Source on GitHub</a>
       </p>
       <p class="copy">© {new Date().getFullYear()} halodisk.app</p>
     </div>
+
+    <p class="legal">
+      macOS, Mac, and Apple Silicon are trademarks of Apple Inc. Halo is an independent project, not
+      affiliated with or endorsed by Apple. No telemetry — your scans never leave your Mac.
+    </p>
   </div>
 </footer>
 
@@ -42,7 +47,7 @@
   .footer {
     background: var(--void);
     padding: 96px 0 48px;
-    border-top: 1px solid oklch(1 0 0 / 0.06);
+    border-top: 1px solid var(--hairline);
   }
 
   .faq {
@@ -82,7 +87,7 @@
   .made a {
     color: var(--ink2);
     text-decoration: none;
-    border-bottom: 1px solid oklch(1 0 0 / 0.15);
+    border-bottom: 1px solid var(--hairline-strong);
     transition: color 150ms ease, border-color 150ms ease;
   }
 
@@ -95,6 +100,14 @@
 
   .copy {
     font-size: 13px;
+    color: var(--ink4);
+  }
+
+  .legal {
+    margin-top: 20px;
+    max-width: 70ch;
+    font-size: 12px;
+    line-height: 1.6;
     color: var(--ink4);
   }
 </style>

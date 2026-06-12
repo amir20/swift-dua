@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 740" font-family="-apple-system, system-ui, sans-serif">
+  <!-- Placeholder mock of the Halo window (light appearance). Breakdown list on
+       the right, donut on the left — matching the app. Replace this file with a
+       real light-mode capture (screenshot-light.webp/png) before launch. -->
+  <rect width="1200" height="740" fill="oklch(1 0 0)"/>
+
+  <!-- Donut (left) -->
+  <g transform="rotate(-90 430 370)" stroke-width="64" fill="none">
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 35)"    stroke-dasharray="390 1319.5"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 172.5)" stroke-dasharray="218 1319.5" stroke-dashoffset="-396"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 310)"   stroke-dasharray="152 1319.5" stroke-dashoffset="-620"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 87.5)"  stroke-dasharray="112 1319.5" stroke-dashoffset="-778"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 225)"   stroke-dasharray="86 1319.5"  stroke-dashoffset="-896"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 2.5)"   stroke-dasharray="60 1319.5"  stroke-dashoffset="-988"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.72 0.125 140)"   stroke-dasharray="46 1319.5"  stroke-dashoffset="-1054"/>
+    <circle cx="430" cy="370" r="210" stroke="oklch(0.83 0.012 75)"    stroke-dasharray="207 1319.5" stroke-dashoffset="-1106"/>
+  </g>
+  <text x="430" y="362" font-size="56" font-weight="200" fill="oklch(0.24 0.006 60)" text-anchor="middle">482 GB</text>
+  <text x="430" y="398" font-size="17" fill="oklch(0.6 0.005 60)" text-anchor="middle">Macintosh HD</text>
+
+  <!-- Sidebar (right) -->
+  <rect x="860" y="0" width="340" height="740" fill="oklch(0.985 0.003 75)"/>
+  <text x="888" y="48" font-size="13" font-weight="600" letter-spacing="2" fill="oklch(0.6 0.005 60)">BREAKDOWN</text>
+  <g font-size="15">
+    <circle cx="896" cy="92" r="6" fill="oklch(0.72 0.125 35)"/>
+    <text x="914" y="97" fill="oklch(0.24 0.006 60)">Library</text>
+    <text x="1172" y="97" fill="oklch(0.6 0.005 60)" text-anchor="end">142 GB</text>
+    <rect x="888" y="110" width="284" height="4" rx="2" fill="oklch(0.92 0.004 70)"/>
+    <rect x="888" y="110" width="200" height="4" rx="2" fill="oklch(0.72 0.125 35)"/>
+
+    <circle cx="896" cy="152" r="6" fill="oklch(0.72 0.125 172.5)"/>
+    <text x="914" y="157" fill="oklch(0.24 0.006 60)">Movies</text>
+    <text x="1172" y="157" fill="oklch(0.6 0.005 60)" text-anchor="end">96 GB</text>
+    <rect x="888" y="170" width="284" height="4" rx="2" fill="oklch(0.92 0.004 70)"/>
+    <rect x="888" y="170" width="136" height="4" rx="2" fill="oklch(0.72 0.125 172.5)"/>
+
+    <circle cx="896" cy="212" r="6" fill="oklch(0.72 0.125 310)"/>
+    <text x="914" y="217" fill="oklch(0.24 0.006 60)">Workspace</text>
+    <text x="1172" y="217" fill="oklch(0.6 0.005 60)" text-anchor="end">71 GB</text>
+    <rect x="888" y="230" width="284" height="4" rx="2" fill="oklch(0.92 0.004 70)"/>
+    <rect x="888" y="230" width="100" height="4" rx="2" fill="oklch(0.72 0.125 310)"/>
+
+    <circle cx="896" cy="272" r="6" fill="oklch(0.72 0.125 87.5)"/>
+    <text x="914" y="277" fill="oklch(0.24 0.006 60)">Pictures</text>
+    <text x="1172" y="277" fill="oklch(0.6 0.005 60)" text-anchor="end">54 GB</text>
+    <rect x="888" y="290" width="284" height="4" rx="2" fill="oklch(0.92 0.004 70)"/>
+    <rect x="888" y="290" width="76" height="4" rx="2" fill="oklch(0.72 0.125 87.5)"/>
+
+    <circle cx="896" cy="332" r="6" fill="oklch(0.72 0.125 225)"/>
+    <text x="914" y="337" fill="oklch(0.24 0.006 60)">Music</text>
+    <text x="1172" y="337" fill="oklch(0.6 0.005 60)" text-anchor="end">38 GB</text>
+    <rect x="888" y="350" width="284" height="4" rx="2" fill="oklch(0.92 0.004 70)"/>
+    <rect x="888" y="350" width="54" height="4" rx="2" fill="oklch(0.72 0.125 225)"/>
+  </g>
+
+  <!-- Reclaim chip -->
+  <rect x="888" y="660" width="284" height="48" rx="12" fill="oklch(0.66 0.15 58 / 0.12)" stroke="oklch(0.66 0.15 58 / 0.4)"/>
+  <text x="1030" y="689" font-size="15" font-weight="600" fill="oklch(0.66 0.15 58)" text-anchor="middle">Reclaim 23.4 GB</text>
+</svg>

@@ -27,8 +27,9 @@
 
     <div class="stage">
       <!-- The screenshot straightens from a 3D tilt as it scrolls through view.
-           Replace static/screenshot.svg with a real dark-mode capture
-           (screenshot.webp + png fallback) when available. -->
+           Two themed mocks are swapped by data-theme (CSS below); replace each
+           with a real capture (screenshot-{dark,light}.webp + png) when
+           available. -->
       <div class="frame-tilt">
         <figure class="frame glass">
           <div class="titlebar" aria-hidden="true">
@@ -36,7 +37,8 @@
             <span class="light yellow"></span>
             <span class="light green"></span>
           </div>
-          <img src="/screenshot.svg" alt="Halo scanning a home folder, showing the usage donut and breakdown sidebar" loading="lazy" />
+          <img class="shot shot-dark" src="/screenshot-dark.svg" alt="Halo scanning a home folder, showing the usage donut and breakdown sidebar" loading="lazy" />
+          <img class="shot shot-light" src="/screenshot-light.svg" alt="Halo scanning a home folder, showing the usage donut and breakdown sidebar" loading="lazy" />
         </figure>
       </div>
 
@@ -159,6 +161,19 @@
     display: block;
     width: 100%;
     height: auto;
+  }
+
+  /* Show the mock matching the active theme. */
+  .frame .shot-light {
+    display: none;
+  }
+
+  :global(:root[data-theme='light']) .frame .shot-dark {
+    display: none;
+  }
+
+  :global(:root[data-theme='light']) .frame .shot-light {
+    display: block;
   }
 
   .beats {

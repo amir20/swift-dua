@@ -3,8 +3,38 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#0c0c0b" />
+    <!-- Resolve the theme before first paint: persisted choice wins, else the
+         OS preference. Sets data-theme so the CSS in app.css applies with no
+         flash, and keeps theme-color in sync (also live-follows the OS when the
+         user hasn't made an explicit choice). -->
+    <script>
+      (function () {
+        var root = document.documentElement;
+        function colorFor(t) {
+          return t === 'light' ? '#ffffff' : '#0c0c0b';
+        }
+        function apply(t) {
+          root.dataset.theme = t;
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', colorFor(t));
+        }
+        var stored = null;
+        try {
+          stored = localStorage.getItem('theme');
+        } catch (e) {}
+        var mq = window.matchMedia('(prefers-color-scheme: light)');
+        apply(stored === 'light' || stored === 'dark' ? stored : mq.matches ? 'light' : 'dark');
+        mq.addEventListener('change', function (e) {
+          var s = null;
+          try {
+            s = localStorage.getItem('theme');
+          } catch (err) {}
+          if (s !== 'light' && s !== 'dark') apply(e.matches ? 'light' : 'dark');
+        });
+      })();
+    </script>
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="48x48" />
     <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />

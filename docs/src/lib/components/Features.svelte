@@ -73,7 +73,7 @@
     position: absolute;
     inset: 0;
     filter: blur(110px);
-    opacity: 0.16;
+    opacity: var(--blob-opacity);
     pointer-events: none;
   }
 

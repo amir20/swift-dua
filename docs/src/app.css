@@ -1,10 +1,16 @@
 /*
- * halodisk.app design system — dark-only.
+ * halodisk.app design system.
  * Color tokens are ported verbatim from the app's Sources/Halo/Palette.swift
- * (dark-appearance oklch values), so the site is pixel-faithful to the app.
+ * paired light/dark oklch values, so the site is pixel-faithful to the app in
+ * both appearances. Dark is the default (:root); the light values live in the
+ * [data-theme='light'] block below. An inline <head> script sets data-theme
+ * from the persisted choice / OS preference before first paint (no flash), and
+ * the nav toggle flips it — see src/lib/theme.ts.
  */
 
 :root {
+  color-scheme: dark;
+
   /* Ink — Palette.ink…ink4 (dark) */
   --ink: oklch(0.93 0.006 80);
   --ink2: oklch(0.76 0.006 80);
@@ -13,6 +19,7 @@
 
   /* Surfaces — hero void is the app's dark bg pushed deeper */
   --void: oklch(0.12 0.005 75);
+  --void-edge: oklch(0.09 0.004 75); /* hero radial-gradient outer stop */
   --bg: oklch(0.17 0.005 75);
   --bg2: oklch(0.205 0.005 75);
 
@@ -21,10 +28,16 @@
   --reclaim-bright: oklch(0.8 0.17 58);
   --progress: oklch(0.7 0.17 256);
 
-  /* Glass */
+  /* Glass + theme-sensitive lines/overlays (white-on-dark by default) */
   --glass-bg: oklch(0.25 0.006 75 / 0.35);
   --glass-line: oklch(1 0 0 / 0.12);
   --glass-highlight: oklch(1 0 0 / 0.18);
+  --glass-shadow: oklch(0 0 0 / 0.35);
+  --glass-fallback: oklch(0.22 0.006 75 / 0.96);
+  --hairline: oklch(1 0 0 / 0.06);
+  --hairline-strong: oklch(1 0 0 / 0.15);
+  --hover-bg: oklch(1 0 0 / 0.07);
+  --blob-opacity: 0.16;
   --radius: 22px;
 
   /* Motion tokens */
@@ -40,6 +53,41 @@
   font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue',
     system-ui, sans-serif;
+}
+
+/* Light theme — Palette.swift light-appearance values + retuned overlays.
+   Overrides the dark defaults whenever the user (or their OS, via the head
+   script) resolves to light. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Ink — Palette.ink…ink4 (light) */
+  --ink: oklch(0.24 0.006 60);
+  --ink2: oklch(0.46 0.006 60);
+  --ink3: oklch(0.6 0.005 60);
+  --ink4: oklch(0.73 0.004 60);
+
+  /* Surfaces — Palette.bg/bg2 (light); void is a soft off-white for depth */
+  --void: oklch(0.985 0.003 75);
+  --void-edge: oklch(0.965 0.004 75);
+  --bg: oklch(1 0 0);
+  --bg2: oklch(0.985 0.003 75);
+
+  /* Accents — Palette.reclaim / Palette.progress (light) */
+  --reclaim: oklch(0.66 0.15 58);
+  --reclaim-bright: oklch(0.72 0.16 58);
+  --progress: oklch(0.62 0.16 256);
+
+  /* Glass + lines/overlays flip to dark-on-light */
+  --glass-bg: oklch(1 0 0 / 0.55);
+  --glass-line: oklch(0 0 0 / 0.08);
+  --glass-highlight: oklch(1 0 0 / 0.7);
+  --glass-shadow: oklch(0.4 0.02 75 / 0.16);
+  --glass-fallback: oklch(1 0 0 / 0.9);
+  --hairline: oklch(0 0 0 / 0.07);
+  --hairline-strong: oklch(0 0 0 / 0.14);
+  --hover-bg: oklch(0 0 0 / 0.05);
+  --blob-opacity: 0.22;
 }
 
 * {
@@ -83,13 +131,13 @@ a {
   border: 1px solid var(--glass-line);
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
-    0 24px 64px oklch(0 0 0 / 0.35);
+    0 24px 64px var(--glass-shadow);
 }
 
 /* Browsers without backdrop-filter get a solid legible surface. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass {
-    background: oklch(0.22 0.006 75 / 0.96);
+    background: var(--glass-fallback);
   }
 }
 
