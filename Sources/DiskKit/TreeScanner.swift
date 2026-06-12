@@ -1,7 +1,8 @@
 import Foundation
 import Synchronization
+
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #endif
 
 /// Cooperative cancellation handle for a scan. `cancel()` is thread-safe and
@@ -50,7 +51,8 @@ public enum TreeScanner {
 
     /// Blocking, build-the-whole-tree scan. Convenient for tests; the GUI uses
     /// `scanStreaming` so it can render before a large scan finishes.
-    public static func scan(_ rootPath: String, progress: ScanProgress = ScanProgress()) -> DirNode {
+    public static func scan(_ rootPath: String, progress: ScanProgress = ScanProgress()) -> DirNode
+    {
         let rootName = (rootPath as NSString).lastPathComponent
         let root = BuildNode(name: rootName, path: rootPath, inherited: nil, hint: .none)
         drain(NodeQueue([root]), context: ScanContext(progress: progress, rootPath: rootPath))
@@ -86,14 +88,20 @@ public enum TreeScanner {
         // Placeholders are size-0 and filtered out of the UI, so their (not-yet-
         // computed) classification is irrelevant — never reclaimable.
         let placeholders = tops.map { t in
-            DirNode(name: t.name, category: t.category, reclaim: nil,
-                    fileBytes: [:], children: [])
+            DirNode(
+                name: t.name, category: t.category, reclaim: nil,
+                fileBytes: [:], children: [])
         }
-        onRoot(DirNode(name: root.name, category: root.category,
-                       reclaim: root.reclaim,
-                       fileBytes: root.fileBytes, children: placeholders))
+        onRoot(
+            DirNode(
+                name: root.name, category: root.category,
+                reclaim: root.reclaim,
+                fileBytes: root.fileBytes, children: placeholders))
 
-        guard !tops.isEmpty else { onDone(); return }
+        guard !tops.isEmpty else {
+            onDone()
+            return
+        }
 
         // One pending counter per top-level subtree: when it hits zero, every
         // node under that subtree is finished, so we can freeze and report it.
@@ -102,7 +110,7 @@ public enum TreeScanner {
         // tracker hold it without forcing the public API to be `@escaping`.
         withoutActuallyEscaping(onChild) { onChild in
             let tracker = SubtreeTracker(count: tops.count) { i in onChild(i, freeze(tops[i])) }
-            for t in tops { tracker.enter(t.rootIndex) }   // the top node itself
+            for t in tops { tracker.enter(t.rootIndex) }  // the top node itself
 
             let queue = NodeQueue(tops)
             token?.onCancel { queue.cancel() }
@@ -114,7 +122,7 @@ public enum TreeScanner {
                     tracker.enter(idx, count: node.children.count)  // children, before…
                     queue.push(node.children)
                     queue.finishOne()
-                    tracker.leave(idx)                              // …finishing this node
+                    tracker.leave(idx)  // …finishing this node
                 }
             }
         }
@@ -153,18 +161,22 @@ public enum TreeScanner {
         // reclaimable ancestor, a parent manifest hint, or the name. When set,
         // every file rolls up to it, so per-file categorization is skipped (the
         // hot path under `node_modules` and friends).
-        let earlyOverride = node.inherited ?? node.hint.category ?? Classifier.nameOverride(node.name)
+        let earlyOverride =
+            node.inherited ?? node.hint.category ?? Classifier.nameOverride(node.name)
         // The immediate parent's name — context for location-aware rules (e.g. a
         // `Caches` directly under `Library` is the canonical macOS cache root).
-        let parentName = ((node.path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+        let parentName = ((node.path as NSString).deletingLastPathComponent as NSString)
+            .lastPathComponent
 
         guard let dirp = opendir(node.path) else {
             // Unreadable: classify from name/hint alone (no contents, no marker),
             // and count the skip so the UI can disclose the blind spot.
             context.progress.addSkippedDir()
-            apply(Classifier.classify(name: node.name, inherited: node.inherited,
-                                      hint: node.hint, hasCachedirTag: false,
-                                      parent: parentName), to: node)
+            apply(
+                Classifier.classify(
+                    name: node.name, inherited: node.inherited,
+                    hint: node.hint, hasCachedirTag: false,
+                    parent: parentName), to: node)
             return
         }
         defer { closedir(dirp) }
@@ -208,9 +220,11 @@ public enum TreeScanner {
             }
         }
 
-        apply(Classifier.classify(name: node.name, inherited: node.inherited,
-                                  hint: node.hint, hasCachedirTag: hasCachedirTag,
-                                  parent: parentName), to: node)
+        apply(
+            Classifier.classify(
+                name: node.name, inherited: node.inherited,
+                hint: node.hint, hasCachedirTag: hasCachedirTag,
+                parent: parentName), to: node)
 
         // Roll files into the override bucket when there is one; otherwise the
         // per-extension buckets stand.
@@ -224,8 +238,9 @@ public enum TreeScanner {
             node.filesAs == nil ? Classifier.hint(forChild: name, siblings: siblings) : .none
         }
         node.children = dirEnts.map { ent in
-            BuildNode(name: ent.name, path: ent.path,
-                      inherited: node.filesAs, hint: childHint(ent.name))
+            BuildNode(
+                name: ent.name, path: ent.path,
+                inherited: node.filesAs, hint: childHint(ent.name))
         }
 
         context.progress.add(files: fileCount, bytes: byteSum)
@@ -252,8 +267,9 @@ public enum TreeScanner {
     /// Converts the fully-built mutable tree into the immutable `DirNode` tree,
     /// computing subtree sizes and wiring parents bottom-up via `DirNode.init`.
     private static func freeze(_ b: BuildNode) -> DirNode {
-        DirNode(name: b.name, category: b.category, reclaim: b.reclaim,
-                fileBytes: b.fileBytes, children: b.children.map(freeze))
+        DirNode(
+            name: b.name, category: b.category, reclaim: b.reclaim,
+            fileBytes: b.fileBytes, children: b.children.map(freeze))
     }
 
     private static func fileExt(_ name: String) -> String {
@@ -359,8 +375,8 @@ private final class NodeQueue: @unchecked Sendable {
         cond.lock()
         defer { cond.unlock() }
         while stack.isEmpty && pending > 0 && !cancelled { cond.wait() }
-        if cancelled || stack.isEmpty {   // cancelled, or pending == 0 → done
-            cond.broadcast()              // wake the other idle workers to exit
+        if cancelled || stack.isEmpty {  // cancelled, or pending == 0 → done
+            cond.broadcast()  // wake the other idle workers to exit
             return nil
         }
         return stack.removeLast()

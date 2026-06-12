@@ -1,8 +1,8 @@
-import SwiftUI
 import AppKit
 import Combine
 import DiskKit
 import Sparkle
+import SwiftUI
 
 @main
 struct HaloApp: App {

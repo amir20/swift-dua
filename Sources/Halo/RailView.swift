@@ -1,5 +1,5 @@
-import SwiftUI
 import DiskKit
+import SwiftUI
 
 struct RailView: View {
     @Bindable var model: ScanModel
@@ -85,8 +85,7 @@ struct RailView: View {
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(on ? Palette.line : .clear))
         .contentShape(Rectangle())
         .onHover { inside in
-            if inside { model.hover = seg.id }
-            else if model.hover == seg.id { model.hover = nil }
+            if inside { model.hover = seg.id } else if model.hover == seg.id { model.hover = nil }
         }
         .onTapGesture { model.tapSegment(seg) }
     }
@@ -128,7 +127,9 @@ struct RailView: View {
         let n = model.reclaimTargets.count
         let enabled = n > 0
         return VStack(spacing: 7) {
-            Button { model.showReclaimSheet = true } label: {
+            Button {
+                model.showReclaimSheet = true
+            } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "trash")
                     Text("Reclaim \(formatSize(model.reclTotal))")
@@ -147,14 +148,16 @@ struct RailView: View {
 
             Text(footerNote(n))
                 .font(.system(size: 11))
-                .foregroundStyle((model.lastReclaim?.failed ?? 0) > 0 ? Palette.reclaim : Palette.ink4)
+                .foregroundStyle(
+                    (model.lastReclaim?.failed ?? 0) > 0 ? Palette.reclaim : Palette.ink4)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .overlay(alignment: .top) { Divider().overlay(Palette.line) }
         .sheet(isPresented: $model.showReclaimSheet) {
-            ReclaimSheet(plan: model.reclaimPlan,
-                         onConfirm: { model.performReclaim($0) },
-                         onCancel: { model.showReclaimSheet = false })
+            ReclaimSheet(
+                plan: model.reclaimPlan,
+                onConfirm: { model.performReclaim($0) },
+                onCancel: { model.showReclaimSheet = false })
         }
     }
 

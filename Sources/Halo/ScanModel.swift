@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import DiskKit
+import SwiftUI
 
 /// One ring slice / rail row in either lens.
 struct Segment: Identifiable {
@@ -9,7 +9,7 @@ struct Segment: Identifiable {
     let category: FileCategory
     let size: Int64
     let recl: Int64
-    let node: DirNode?      // folder lens: the directory this slice represents
+    let node: DirNode?  // folder lens: the directory this slice represents
     let isType: Bool
     let drillable: Bool
     /// The slice/swatch color: a distinct per-folder hue in the folder lens, the
@@ -18,8 +18,9 @@ struct Segment: Identifiable {
     let color: Color
 
     func recolored(_ c: Color) -> Segment {
-        Segment(id: id, label: label, category: category, size: size, recl: recl,
-                node: node, isType: isType, drillable: drillable, color: c)
+        Segment(
+            id: id, label: label, category: category, size: size, recl: recl,
+            node: node, isType: isType, drillable: drillable, color: c)
     }
 }
 
@@ -45,11 +46,14 @@ enum ScanEvent: Sendable {
 }
 
 /// Summary of a completed reclaim, for a brief confirmation note.
-struct ReclaimOutcome { let trashed: Int; let failed: Int }
+struct ReclaimOutcome {
+    let trashed: Int
+    let failed: Int
+}
 
 /// One reviewable row in the reclaim confirmation dialog.
 struct ReclaimItem: Identifiable {
-    let id: ObjectIdentifier   // the source node's identity
+    let id: ObjectIdentifier  // the source node's identity
     let name: String
     let url: URL
     let size: Int64
@@ -137,7 +141,8 @@ final class ScanModel {
             .resourceValues(forKeys: [.volumeNameKey]).volumeName
         scanning = true
         scanError = nil
-        liveFiles = 0; liveBytes = 0
+        liveFiles = 0
+        liveBytes = 0
         skippedDirs = 0
         showRing = false
         // Don't carry a prior reclaim's footer note into an unrelated scan; a
@@ -145,7 +150,8 @@ final class ScanModel {
         lastReclaim = nil
         let prog = ScanProgress()
         progress = prog
-        ringDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+        ringDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
+            [weak self] _ in
             Task { @MainActor in
                 guard let self, self.scanning else { return }
                 withAnimation(.easeOut(duration: 0.25)) { self.showRing = true }
@@ -166,9 +172,12 @@ final class ScanModel {
         Task.detached(priority: .userInitiated) {
             TreeScanner.scanStreaming(
                 scanPath, progress: prog, token: token,
-                onRoot:  { sink.yield(.root($0)) },
+                onRoot: { sink.yield(.root($0)) },
                 onChild: { sink.yield(.child($0, $1)) },
-                onDone:  { sink.yield(.done); sink.finish() }
+                onDone: {
+                    sink.yield(.done)
+                    sink.finish()
+                }
             )
         }
         let epoch = scanEpoch
@@ -176,9 +185,9 @@ final class ScanModel {
             for await event in events {
                 guard let self, self.scanEpoch == epoch else { return }
                 switch event {
-                case .root(let node):           self.installRoot(node)
-                case .child(let i, let node):   self.applyChild(i, node)
-                case .done:                     self.finishScan()
+                case .root(let node): self.installRoot(node)
+                case .child(let i, let node): self.applyChild(i, node)
+                case .done: self.finishScan()
                 }
             }
         }
@@ -202,8 +211,10 @@ final class ScanModel {
         scanConsumer?.cancel()
         scanConsumer = nil
         scanEpoch += 1
-        pollTimer?.invalidate(); pollTimer = nil
-        ringDelayTimer?.invalidate(); ringDelayTimer = nil
+        pollTimer?.invalidate()
+        pollTimer = nil
+        ringDelayTimer?.invalidate()
+        ringDelayTimer = nil
     }
 
     // The three scan-event handlers below are internal (not private) so tests
@@ -234,8 +245,10 @@ final class ScanModel {
     }
 
     func finishScan() {
-        pollTimer?.invalidate(); pollTimer = nil
-        ringDelayTimer?.invalidate(); ringDelayTimer = nil
+        pollTimer?.invalidate()
+        pollTimer = nil
+        ringDelayTimer?.invalidate()
+        ringDelayTimer = nil
         if let s = progress?.snapshot() {
             liveFiles = s.files
             liveBytes = s.bytes
@@ -254,7 +267,8 @@ final class ScanModel {
         // An empty tree from a root we can't read is an error, not a clean
         // result — say so instead of presenting a silent empty donut.
         if let r = root, r.children.isEmpty, r.fileBytes.isEmpty,
-           !FileManager.default.isReadableFile(atPath: scanRootPath) {
+            !FileManager.default.isReadableFile(atPath: scanRootPath)
+        {
             scanError = "Couldn't read \(scanRootPath)"
         }
         // Restore the scope we were in before a post-reclaim rescan.
@@ -278,8 +292,9 @@ final class ScanModel {
         // Preserve the root's full mark (confidence/signal/reason), not a Bool —
         // otherwise the streaming restitch would launder a medium-confidence root
         // up to high via the Bool convenience initializer.
-        DirNode(name: rootName, category: rootCategory, reclaim: rootReclaim,
-                fileBytes: rootFiles, children: liveChildren)
+        DirNode(
+            name: rootName, category: rootCategory, reclaim: rootReclaim,
+            fileBytes: rootFiles, children: liveChildren)
     }
 
     /// Loads an in-memory tree immediately (previews / tests). `rootPath` is the
@@ -347,7 +362,8 @@ final class ScanModel {
     /// `refresh()`, for when just `expanded` toggles (no scope change).
     private func refreshExpandedLocations() {
         guard mode == .type, let e = expanded, let cur = current else {
-            expandedLocations = []; return
+            expandedLocations = []
+            return
         }
         expandedLocations = Derive.typeLocations(cur, e)
     }
@@ -360,16 +376,19 @@ final class ScanModel {
             // contribute no arc, but the slice geometry still floors them to a
             // hoverable sliver — which is what surfaced "0 KB" on hover.
             var segs = cur.children.filter { $0.size > 0 }.map { c in
-                Segment(id: Self.nid(c), label: c.name, category: c.category,
-                        size: c.size, recl: Derive.reclaimBytes(c),
-                        node: c, isType: false, drillable: !c.children.isEmpty, color: .clear)
+                Segment(
+                    id: Self.nid(c), label: c.name, category: c.category,
+                    size: c.size, recl: Derive.reclaimBytes(c),
+                    node: c, isType: false, drillable: !c.children.isEmpty, color: .clear)
             }
             let loose = cur.fileBytes.values.reduce(0, +)
             if loose > 0 {
                 let cat = cur.fileBytes.max { $0.value < $1.value }!.key
-                segs.append(Segment(id: "files:" + Self.nid(cur), label: "Files in this folder",
-                                    category: cat, size: loose, recl: 0,
-                                    node: nil, isType: false, drillable: false, color: .clear))
+                segs.append(
+                    Segment(
+                        id: "files:" + Self.nid(cur), label: "Files in this folder",
+                        category: cat, size: loose, recl: 0,
+                        node: nil, isType: false, drillable: false, color: .clear))
             }
             // Color folders by size rank so the biggest, most-glanced-at slices
             // get the first, most-distinct hues. (The placeholder `.clear` above
@@ -380,9 +399,10 @@ final class ScanModel {
             let sizes = Derive.typeSizes(cur)
             let recl = Derive.typeReclaim(cur)
             return sizes.map { (cat, size) in
-                Segment(id: "type:\(cat.rawValue)", label: cat.label, category: cat,
-                        size: size, recl: recl[cat] ?? 0, node: nil, isType: true,
-                        drillable: false, color: Palette.color(cat))
+                Segment(
+                    id: "type:\(cat.rawValue)", label: cat.label, category: cat,
+                    size: size, recl: recl[cat] ?? 0, node: nil, isType: true,
+                    drillable: false, color: Palette.color(cat))
             }.sorted { $0.size > $1.size }
         }
     }
@@ -464,11 +484,12 @@ final class ScanModel {
     var reclaimPlan: [ReclaimItem] {
         reclaimTargets.compactMap { node in
             guard let mark = effectiveMark(for: node) else { return nil }
-            return ReclaimItem(id: ObjectIdentifier(node), name: node.name,
-                               url: absoluteURL(for: node), size: node.size,
-                               confidence: mark.confidence,
-                               signalLabel: Self.signalLabel(mark.signal, category: node.category),
-                               reason: mark.reason, preselected: mark.confidence == .high)
+            return ReclaimItem(
+                id: ObjectIdentifier(node), name: node.name,
+                url: absoluteURL(for: node), size: node.size,
+                confidence: mark.confidence,
+                signalLabel: Self.signalLabel(mark.signal, category: node.category),
+                reason: mark.reason, preselected: mark.confidence == .high)
         }.sorted { $0.size > $1.size }
     }
 
@@ -494,8 +515,9 @@ final class ScanModel {
             let result = Reclaimer.moveToTrash(items.map(\.url))
             let trashedURLs = Set(result.trashed)
             let ids = Set(items.filter { trashedURLs.contains($0.url) }.map(\.id))
-            let outcome = ReclaimOutcome(trashed: result.trashed.count,
-                                         failed: result.failed.count)
+            let outcome = ReclaimOutcome(
+                trashed: result.trashed.count,
+                failed: result.failed.count)
             await MainActor.run { self.applyReclaimResult(trashedIDs: ids, outcome: outcome) }
         }
     }
@@ -517,8 +539,11 @@ final class ScanModel {
         }
         let names = path.dropFirst().map(\.name)
         // A trashed scan root leaves an empty tree of the same name.
-        let newRoot = pruned ?? DirNode(name: r.name, category: r.category,
-                                        reclaim: nil, fileBytes: [:], children: [])
+        let newRoot =
+            pruned
+            ?? DirNode(
+                name: r.name, category: r.category,
+                reclaim: nil, fileBytes: [:], children: [])
         root = newRoot
         path = Self.resolvePath(from: newRoot, names: names)
         hover = nil
@@ -542,9 +567,9 @@ final class ScanModel {
 
     private static func signalLabel(_ s: ReclaimSignal, category: FileCategory) -> String {
         switch s {
-        case .cachedirTag:     return "CACHEDIR.TAG"
+        case .cachedirTag: return "CACHEDIR.TAG"
         case .manifest(let m): return m
-        case .knownName:       return category.label
+        case .knownName: return category.label
         }
     }
 
@@ -556,7 +581,8 @@ final class ScanModel {
             // (it then shows its "Files in this folder" breakdown). The loose-files
             // pseudo-segment carries no node, so it stays a no-op.
             if let node = s.node {
-                hover = nil; expanded = nil
+                hover = nil
+                expanded = nil
                 path.append(node)
                 refresh()
                 sweepKey += 1
@@ -568,7 +594,9 @@ final class ScanModel {
     }
 
     func jump(to node: DirNode) {
-        mode = .folder; hover = nil; expanded = nil
+        mode = .folder
+        hover = nil
+        expanded = nil
         path = Derive.pathTo(node)
         refresh()
         sweepKey += 1
@@ -578,7 +606,8 @@ final class ScanModel {
         // The leading volume crumb (when present) is decorative, not navigable.
         let i = index - crumbOffset
         guard i >= 0, i < path.count else { return }
-        hover = nil; expanded = nil
+        hover = nil
+        expanded = nil
         path = Array(path.prefix(i + 1))
         refresh()
         sweepKey += 1
@@ -586,7 +615,8 @@ final class ScanModel {
 
     func back() {
         guard path.count > 1 else { return }
-        hover = nil; expanded = nil
+        hover = nil
+        expanded = nil
         path.removeLast()
         refresh()
         sweepKey += 1
@@ -594,7 +624,9 @@ final class ScanModel {
 
     func setMode(_ m: Lens) {
         guard m != mode else { return }
-        mode = m; hover = nil; expanded = nil
+        mode = m
+        hover = nil
+        expanded = nil
         refresh()
         sweepKey += 1
     }

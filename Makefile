@@ -21,7 +21,10 @@ NOTARY_PROFILE ?= halo-notary
 NOTARY_ARGS    ?= --keychain-profile $(NOTARY_PROFILE)
 
 .DEFAULT_GOAL := help
-.PHONY: help build test run app dmg pack-dmg notarize release notary-creds icon clean
+.PHONY: help build test run fmt lint app dmg pack-dmg notarize release notary-creds icon clean
+
+# Everything swift-format touches (rules live in .swift-format).
+FMT_PATHS := Sources Tests Plugins Icons Package.swift
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
@@ -35,6 +38,12 @@ test: ## Run the test suite
 
 run: ## Build & launch Halo from source
 	swift run Halo
+
+fmt: ## Format all Swift sources in place (swift-format, rules in .swift-format)
+	xcrun swift-format -i -r $(FMT_PATHS)
+
+lint: ## Check formatting without modifying files (fails if unformatted)
+	xcrun swift-format lint --strict -r $(FMT_PATHS)
 
 app: ## Package Halo.app (release binary + Info.plist + icon, signed per SIGN_IDENTITY)
 	swift package --disable-sandbox --allow-writing-to-package-directory bundle-app Halo

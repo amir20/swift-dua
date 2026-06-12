@@ -15,16 +15,16 @@ public enum FileCategory: String, CaseIterable, Sendable, Hashable {
     /// Human-readable label shown in the rail and donut hole.
     public var label: String {
         switch self {
-        case .deps:      return "Dependencies"
-        case .cache:     return "Caches"
-        case .build:     return "Build output"
+        case .deps: return "Dependencies"
+        case .cache: return "Caches"
+        case .build: return "Build output"
         case .container: return "Containers"
-        case .media:     return "Media"
-        case .code:      return "Source code"
-        case .docs:      return "Documents"
-        case .app:       return "Applications"
-        case .trash:     return "Trash"
-        case .other:     return "Other"
+        case .media: return "Media"
+        case .code: return "Source code"
+        case .docs: return "Documents"
+        case .app: return "Applications"
+        case .trash: return "Trash"
+        case .other: return "Other"
         }
     }
 }

@@ -1,6 +1,7 @@
 import XCTest
-@testable import Halo
+
 @testable import DiskKit
+@testable import Halo
 
 /// Lifecycle of real (filesystem-backed) scans driven through `ScanModel`:
 /// supersession, error surfacing, and the unreadable-dir disclosure.
@@ -15,8 +16,10 @@ final class ScanLifecycleTests: XCTestCase {
         return url
     }
 
-    private func waitForScanToFinish(_ model: ScanModel,
-                                     timeout: TimeInterval = 15) async throws {
+    private func waitForScanToFinish(
+        _ model: ScanModel,
+        timeout: TimeInterval = 15
+    ) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while model.scanning {
             if Date() > deadline { return XCTFail("scan did not finish in \(timeout)s") }
@@ -47,10 +50,12 @@ final class ScanLifecycleTests: XCTestCase {
         // Give the superseded scan's stragglers every chance to (wrongly) land.
         try await Task.sleep(for: .milliseconds(500))
 
-        XCTAssertEqual(model.root?.name, small.lastPathComponent,
-                       "the second scan's tree must win")
-        XCTAssertEqual(model.currentURL.path, small.path,
-                       "the model must point at the second scan's root")
+        XCTAssertEqual(
+            model.root?.name, small.lastPathComponent,
+            "the second scan's tree must win")
+        XCTAssertEqual(
+            model.currentURL.path, small.path,
+            "the model must point at the second scan's root")
         XCTAssertFalse(model.scanning)
     }
 
@@ -58,8 +63,9 @@ final class ScanLifecycleTests: XCTestCase {
     /// breadcrumb navigation accounts for that extra leading crumb.
     func testCrumbsLeadWithRealVolumeName() async throws {
         let base = try makeTempDir("vol")
-        try FileManager.default.createDirectory(at: base.appendingPathComponent("sub"),
-                                                withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: base.appendingPathComponent("sub"),
+            withIntermediateDirectories: true)
         try Data(count: 1_000).write(to: base.appendingPathComponent("sub/f.bin"))
 
         let model = ScanModel()
@@ -77,8 +83,9 @@ final class ScanLifecycleTests: XCTestCase {
         model.jump(to: sub)
         XCTAssertEqual(model.crumbs.count, 3)
         model.goTo(crumb: 1)
-        XCTAssertEqual(model.current?.name, model.root?.name,
-                       "crumb 1 (after the volume) is the scan root")
+        XCTAssertEqual(
+            model.current?.name, model.root?.name,
+            "crumb 1 (after the volume) is the scan root")
     }
 
     /// `rescan()` re-reads the same root from disk and restores the navigation
@@ -111,8 +118,9 @@ final class ScanLifecycleTests: XCTestCase {
         let locked = try makeTempDir("locked")
         try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
         addTeardownBlock {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o755],
-                                                   ofItemAtPath: locked.path)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: locked.path)
         }
 
         let model = ScanModel()
@@ -132,8 +140,9 @@ final class ScanLifecycleTests: XCTestCase {
         try Data(count: 3_000).write(to: base.appendingPathComponent("readable.bin"))
         try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
         addTeardownBlock {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o755],
-                                                   ofItemAtPath: locked.path)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: locked.path)
         }
 
         let model = ScanModel()

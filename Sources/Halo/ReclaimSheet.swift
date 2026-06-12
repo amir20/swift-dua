@@ -1,5 +1,5 @@
-import SwiftUI
 import DiskKit
+import SwiftUI
 
 /// Confirmation dialog for moving reclaimable directories to the Trash. Lists
 /// every safe target with a checkbox (high-confidence pre-checked), a live
@@ -11,9 +11,11 @@ struct ReclaimSheet: View {
 
     @State private var selected: Set<ReclaimItem.ID>
 
-    init(plan: [ReclaimItem],
-         onConfirm: @escaping ([ReclaimItem]) -> Void,
-         onCancel: @escaping () -> Void) {
+    init(
+        plan: [ReclaimItem],
+        onConfirm: @escaping ([ReclaimItem]) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
         self.plan = plan
         self.onConfirm = onConfirm
         self.onCancel = onCancel
@@ -72,10 +74,12 @@ struct ReclaimSheet: View {
                         .lineLimit(1).truncationMode(.middle)
                     confidencePill(item.confidence)
                 }
-                Text("\(abbreviated(item.url.deletingLastPathComponent().path))  ·  \(item.signalLabel)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(Palette.ink4)
-                    .lineLimit(1).truncationMode(.middle)
+                Text(
+                    "\(abbreviated(item.url.deletingLastPathComponent().path))  ·  \(item.signalLabel)"
+                )
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Palette.ink4)
+                .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 8)
             Text(formatSize(item.size))
@@ -106,7 +110,9 @@ struct ReclaimSheet: View {
             Spacer()
             Button("Cancel", action: onCancel)
                 .buttonStyle(.glass)
-            Button { onConfirm(chosen) } label: {
+            Button {
+                onConfirm(chosen)
+            } label: {
                 Label("Move to Trash", systemImage: "trash")
                     .font(.system(size: 13, weight: .semibold))
             }

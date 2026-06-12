@@ -1,5 +1,6 @@
-import XCTest
 import Foundation
+import XCTest
+
 @testable import DiskKit
 
 /// Thread-safe sink for the streaming scan's callbacks, which fire on scanner
@@ -22,10 +23,13 @@ private final class StreamSink: @unchecked Sendable {
 final class ClassifierTests: XCTestCase {
     /// Classify `name` as if it were a child of a directory containing
     /// `siblings`, with an optional inherited override / CACHEDIR.TAG.
-    private func classify(_ name: String, siblings: Set<String> = [],
-                          inherited: FileCategory? = nil, tag: Bool = false) -> Classifier.DirClass {
+    private func classify(
+        _ name: String, siblings: Set<String> = [],
+        inherited: FileCategory? = nil, tag: Bool = false
+    ) -> Classifier.DirClass {
         let hint = Classifier.hint(forChild: name, siblings: siblings)
-        return Classifier.classify(name: name, inherited: inherited, hint: hint, hasCachedirTag: tag)
+        return Classifier.classify(
+            name: name, inherited: inherited, hint: hint, hasCachedirTag: tag)
     }
 
     func testUnambiguousNamesAreHighByName() {
@@ -119,7 +123,8 @@ final class ClassifierTests: XCTestCase {
 final class ReclaimScanTests: XCTestCase {
     private func scanTree(_ build: (URL, FileManager) throws -> Void) throws -> DirNode {
         let fm = FileManager.default
-        let base = fm.temporaryDirectory.appendingPathComponent("diskkit-reclaim-\(UUID().uuidString)")
+        let base = fm.temporaryDirectory.appendingPathComponent(
+            "diskkit-reclaim-\(UUID().uuidString)")
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: base) }
         try build(base, fm)
@@ -134,10 +139,12 @@ final class ReclaimScanTests: XCTestCase {
 
     func testManifestEvidenceFlagsHigh() throws {
         let root = try scanTree { base, fm in
-            try fm.createDirectory(at: base.appendingPathComponent("proj/node_modules"),
-                                   withIntermediateDirectories: true)
+            try fm.createDirectory(
+                at: base.appendingPathComponent("proj/node_modules"),
+                withIntermediateDirectories: true)
             try Data("{}".utf8).write(to: base.appendingPathComponent("proj/package.json"))
-            try Data(count: 5_000).write(to: base.appendingPathComponent("proj/node_modules/dep.bin"))
+            try Data(count: 5_000).write(
+                to: base.appendingPathComponent("proj/node_modules/dep.bin"))
         }
         let nm = find(root, "node_modules")
         XCTAssertEqual(nm?.reclaim?.confidence, .high)
@@ -147,8 +154,9 @@ final class ReclaimScanTests: XCTestCase {
 
     func testUnambiguousNameWithoutManifestIsHigh() throws {
         let root = try scanTree { base, fm in
-            try fm.createDirectory(at: base.appendingPathComponent("node_modules"),
-                                   withIntermediateDirectories: true)
+            try fm.createDirectory(
+                at: base.appendingPathComponent("node_modules"),
+                withIntermediateDirectories: true)
             try Data(count: 5_000).write(to: base.appendingPathComponent("node_modules/dep.bin"))
         }
         XCTAssertEqual(find(root, "node_modules")?.reclaim?.signal, .knownName)
@@ -156,8 +164,9 @@ final class ReclaimScanTests: XCTestCase {
 
     func testAmbiguousNameAloneIsMedium() throws {
         let root = try scanTree { base, fm in
-            try fm.createDirectory(at: base.appendingPathComponent("build"),
-                                   withIntermediateDirectories: true)
+            try fm.createDirectory(
+                at: base.appendingPathComponent("build"),
+                withIntermediateDirectories: true)
             try Data(count: 5_000).write(to: base.appendingPathComponent("build/out.bin"))
         }
         XCTAssertEqual(find(root, "build")?.reclaim?.confidence, .medium)
@@ -176,8 +185,9 @@ final class ReclaimScanTests: XCTestCase {
         XCTAssertEqual(c.category, .cache)
         // blob.bin would be `.other` by extension, but a CACHEDIR.TAG dir rolls
         // every file up to `.cache` (the late-override rebucket path).
-        XCTAssertEqual(Set(c.fileBytes.keys), [.cache],
-                       "a CACHEDIR.TAG dir's own files attribute to .cache, not their extension")
+        XCTAssertEqual(
+            Set(c.fileBytes.keys), [.cache],
+            "a CACHEDIR.TAG dir's own files attribute to .cache, not their extension")
     }
 
     /// Exactly the 43-byte signature with no trailing bytes — the common real
@@ -199,9 +209,11 @@ final class ReclaimScanTests: XCTestCase {
     func testNestedReclaimRootIsNotDoubleCounted() throws {
         let root = try scanTree { base, fm in
             // An inner node_modules whose own name would otherwise flag high.
-            try fm.createDirectory(at: base.appendingPathComponent("node_modules/pkg/node_modules"),
-                                   withIntermediateDirectories: true)
-            try Data(count: 7_000).write(to: base.appendingPathComponent("node_modules/pkg/node_modules/dep.bin"))
+            try fm.createDirectory(
+                at: base.appendingPathComponent("node_modules/pkg/node_modules"),
+                withIntermediateDirectories: true)
+            try Data(count: 7_000).write(
+                to: base.appendingPathComponent("node_modules/pkg/node_modules/dep.bin"))
         }
         let outer = try XCTUnwrap(find(root, "node_modules"))
         XCTAssertNotNil(outer.reclaim, "the outer node_modules is the reclaim target")
@@ -220,8 +232,9 @@ final class ReclaimScanTests: XCTestCase {
     /// Bundler artifact — it must stay medium, never lifted to high by the manifest.
     func testGemfileDoesNotLiftVendorToHigh() throws {
         let root = try scanTree { base, fm in
-            try fm.createDirectory(at: base.appendingPathComponent("rails/vendor"),
-                                   withIntermediateDirectories: true)
+            try fm.createDirectory(
+                at: base.appendingPathComponent("rails/vendor"),
+                withIntermediateDirectories: true)
             try Data("source 'https://rubygems.org'".utf8)
                 .write(to: base.appendingPathComponent("rails/Gemfile"))
             try Data(count: 4_000).write(to: base.appendingPathComponent("rails/vendor/asset.bin"))
@@ -238,15 +251,18 @@ final class ReclaimScanTests: XCTestCase {
     func testContainerLibraryCachesIsReclaimableHigh() throws {
         let root = try scanTree { base, fm in
             let cache = base.appendingPathComponent(
-                "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches")
+                "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches"
+            )
             try fm.createDirectory(at: cache, withIntermediateDirectories: true)
             try Data(count: 5_000_000).write(to: cache.appendingPathComponent("big.bin"))
         }
-        let caches = try XCTUnwrap(find(root, "Caches"),
-                                   "the container's Caches dir must be a node, not absorbed into Containers")
+        let caches = try XCTUnwrap(
+            find(root, "Caches"),
+            "the container's Caches dir must be a node, not absorbed into Containers")
         XCTAssertEqual(caches.category, .cache)
-        XCTAssertEqual(caches.reclaim?.confidence, .high,
-                       "a Caches directly under Library is the canonical macOS cache root")
+        XCTAssertEqual(
+            caches.reclaim?.confidence, .high,
+            "a Caches directly under Library is the canonical macOS cache root")
         XCTAssertEqual(caches.reclaim?.signal, .knownName)
         // The whole cache subtree counts once, attributed to the Caches root.
         XCTAssertEqual(Derive.reclaimRoots(root).count, 1)
@@ -279,7 +295,8 @@ final class ReclaimScanTests: XCTestCase {
         let root = try scanTree { base, fm in
             let dir = base.appendingPathComponent("notes")
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            try Data("not a real cache tag".utf8).write(to: dir.appendingPathComponent("CACHEDIR.TAG"))
+            try Data("not a real cache tag".utf8).write(
+                to: dir.appendingPathComponent("CACHEDIR.TAG"))
             try Data(count: 5_000).write(to: dir.appendingPathComponent("note.txt"))
         }
         XCTAssertNil(find(root, "notes")?.reclaim, "a bogus CACHEDIR.TAG must not flag the dir")
@@ -300,8 +317,9 @@ final class DerivationsTests: XCTestCase {
     func testTypeSizesSumToTotal() {
         let root = MockTree.make()
         let sizes = Derive.typeSizes(root)
-        XCTAssertEqual(sizes.values.reduce(0, +), root.size,
-                       "every leaf byte is attributed to exactly one category")
+        XCTAssertEqual(
+            sizes.values.reduce(0, +), root.size,
+            "every leaf byte is attributed to exactly one category")
     }
 
     func testDepsAggregatedAcrossProjects() {
@@ -341,15 +359,16 @@ final class DerivationsTests: XCTestCase {
         XCTAssertNil(find(newRoot, "Caches"), "the pruned subtree is gone")
         let nm = find(newRoot, "node_modules")
         XCTAssertNotNil(nm, "untouched subtrees survive")
-        XCTAssertEqual(Derive.pathTo(nm!).first?.name, newRoot.name,
-                       "the kept subtree's parent chain reaches the new root")
+        XCTAssertEqual(
+            Derive.pathTo(nm!).first?.name, newRoot.name,
+            "the kept subtree's parent chain reaches the new root")
     }
 
     /// Removing nothing returns the same instance — the caller uses identity to
     /// detect stale node references and fall back to a rescan.
     func testRemovingUnknownIDsReturnsSameInstance() {
         let root = MockTree.make()
-        let other = MockTree.make()   // identities from a different tree
+        let other = MockTree.make()  // identities from a different tree
         XCTAssertTrue(Derive.removing([other.children[0].id], from: root) === root)
         XCTAssertTrue(Derive.removing([], from: root) === root)
     }
@@ -401,8 +420,10 @@ final class TreeScannerTests: XCTestCase {
         let fm = FileManager.default
         let base = fm.temporaryDirectory
             .appendingPathComponent("diskkit-hardlink-\(UUID().uuidString)")
-        try fm.createDirectory(at: base.appendingPathComponent("a"), withIntermediateDirectories: true)
-        try fm.createDirectory(at: base.appendingPathComponent("b"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("a"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("b"), withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: base) }
 
         let original = base.appendingPathComponent("a/blob.bin")
@@ -412,14 +433,16 @@ final class TreeScannerTests: XCTestCase {
         // Control: the same single file with no second link.
         let control = fm.temporaryDirectory
             .appendingPathComponent("diskkit-hardlink-ctl-\(UUID().uuidString)")
-        try fm.createDirectory(at: control.appendingPathComponent("a"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: control.appendingPathComponent("a"), withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: control) }
         try Data(count: 100_000).write(to: control.appendingPathComponent("a/blob.bin"))
 
         let linked = TreeScanner.scan(base.path)
         let single = TreeScanner.scan(control.path)
-        XCTAssertEqual(linked.size, single.size,
-                       "two links to one inode must count its blocks exactly once")
+        XCTAssertEqual(
+            linked.size, single.size,
+            "two links to one inode must count its blocks exactly once")
     }
 
     /// An unreadable directory is skipped silently by the walk — but it must be
@@ -431,11 +454,13 @@ final class TreeScannerTests: XCTestCase {
             .appendingPathComponent("diskkit-skip-\(UUID().uuidString)")
         let locked = base.appendingPathComponent("locked")
         try fm.createDirectory(at: locked, withIntermediateDirectories: true)
-        try fm.createDirectory(at: base.appendingPathComponent("open"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("open"), withIntermediateDirectories: true)
         try Data(count: 4_000).write(to: base.appendingPathComponent("open/x.bin"))
         try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
         addTeardownBlock {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: locked.path)
             try? FileManager.default.removeItem(at: base)
         }
 
@@ -459,8 +484,10 @@ final class TreeScannerTests: XCTestCase {
         let fm = FileManager.default
         let base = fm.temporaryDirectory
             .appendingPathComponent("diskkit-cancel-\(UUID().uuidString)")
-        try fm.createDirectory(at: base.appendingPathComponent("alpha/sub"), withIntermediateDirectories: true)
-        try fm.createDirectory(at: base.appendingPathComponent("beta"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("alpha/sub"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("beta"), withIntermediateDirectories: true)
         try Data(count: 10_000).write(to: base.appendingPathComponent("alpha/sub/a.bin"))
         try Data(count: 10_000).write(to: base.appendingPathComponent("beta/b.bin"))
         addTeardownBlock { try? FileManager.default.removeItem(at: base) }
@@ -471,9 +498,9 @@ final class TreeScannerTests: XCTestCase {
         let sink = StreamSink()
         TreeScanner.scanStreaming(
             base.path, progress: ScanProgress(), token: token,
-            onRoot:  { sink.setRoot($0) },
+            onRoot: { sink.setRoot($0) },
             onChild: { i, node in sink.addChild(i, node) },
-            onDone:  { sink.finish() }
+            onDone: { sink.finish() }
         )
 
         XCTAssertNotNil(sink.root, "the placeholder root is reported even when cancelled")
@@ -491,12 +518,15 @@ final class TreeScannerTests: XCTestCase {
         // A deliberately lopsided tree: nested dirs, an override dir, an empty
         // dir, and a loose top-level file (which belongs to the root, not a
         // subtree).
-        try fm.createDirectory(at: base.appendingPathComponent("alpha/sub/deep"),
-                               withIntermediateDirectories: true)
-        try fm.createDirectory(at: base.appendingPathComponent("beta/node_modules"),
-                               withIntermediateDirectories: true)
-        try fm.createDirectory(at: base.appendingPathComponent("gamma"),
-                               withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("alpha/sub/deep"),
+            withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("beta/node_modules"),
+            withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: base.appendingPathComponent("gamma"),
+            withIntermediateDirectories: true)
         try Data(count: 30_000).write(to: base.appendingPathComponent("alpha/sub/deep/a.bin"))
         try Data(count: 10_000).write(to: base.appendingPathComponent("alpha/b.bin"))
         try Data(count: 50_000).write(to: base.appendingPathComponent("beta/node_modules/dep.bin"))
@@ -510,29 +540,34 @@ final class TreeScannerTests: XCTestCase {
         let sink = StreamSink()
         TreeScanner.scanStreaming(
             base.path, progress: ScanProgress(),
-            onRoot:  { node in sink.setRoot(node) },
+            onRoot: { node in sink.setRoot(node) },
             onChild: { i, node in sink.addChild(i, node) },
-            onDone:  { sink.finish() }
+            onDone: { sink.finish() }
         )
 
         let rootNode = try XCTUnwrap(sink.root)
         let placeholders = rootNode.children
         XCTAssertEqual(sink.doneCount, 1, "onDone fires exactly once")
-        XCTAssertEqual(placeholders.count, blocking.children.count,
-                       "one placeholder per top-level directory")
-        XCTAssertEqual(Set(sink.children.keys), Set(0..<placeholders.count),
-                       "every top-level subtree reported exactly once, no gaps or repeats")
+        XCTAssertEqual(
+            placeholders.count, blocking.children.count,
+            "one placeholder per top-level directory")
+        XCTAssertEqual(
+            Set(sink.children.keys), Set(0..<placeholders.count),
+            "every top-level subtree reported exactly once, no gaps or repeats")
 
         // Reassemble in placeholder order and compare to the blocking scan.
         let ordered = (0..<placeholders.count).map { sink.children[$0]! }
-        let streamed = DirNode(name: rootNode.name, category: rootNode.category,
-                               isReclaimable: rootNode.isReclaimable,
-                               fileBytes: rootNode.fileBytes, children: ordered)
-        XCTAssertEqual(streamed.size, blocking.size,
-                       "streamed tree totals the same as the blocking scan")
+        let streamed = DirNode(
+            name: rootNode.name, category: rootNode.category,
+            isReclaimable: rootNode.isReclaimable,
+            fileBytes: rootNode.fileBytes, children: ordered)
+        XCTAssertEqual(
+            streamed.size, blocking.size,
+            "streamed tree totals the same as the blocking scan")
 
         // Per-subtree sizes line up by name (order may differ between the two).
-        let streamedByName = Dictionary(uniqueKeysWithValues: streamed.children.map { ($0.name, $0.size) })
+        let streamedByName = Dictionary(
+            uniqueKeysWithValues: streamed.children.map { ($0.name, $0.size) })
         for c in blocking.children {
             XCTAssertEqual(streamedByName[c.name], c.size, "subtree \(c.name) sizes match")
         }

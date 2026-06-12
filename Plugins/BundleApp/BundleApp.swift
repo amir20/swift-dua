@@ -1,5 +1,5 @@
-import PackagePlugin
 import Foundation
+import PackagePlugin
 
 /// `swift package bundle-app`
 ///
@@ -49,7 +49,8 @@ struct BundleApp: CommandPlugin {
         let bundle = root.appending(component: "\(appName).app")
         let macOSDir = bundle.appending(component: "Contents").appending(component: "MacOS")
         let resourcesDir = bundle.appending(component: "Contents").appending(component: "Resources")
-        let frameworksDir = bundle.appending(component: "Contents").appending(component: "Frameworks")
+        let frameworksDir = bundle.appending(component: "Contents").appending(
+            component: "Frameworks")
 
         try? fm.removeItem(at: bundle)
         try fm.createDirectory(at: macOSDir, withIntermediateDirectories: true)
@@ -65,13 +66,20 @@ struct BundleApp: CommandPlugin {
         let sparkleSrc = binary.deletingLastPathComponent()
             .appending(component: "Sparkle.framework")
         guard fm.fileExists(atPath: sparkleSrc.path(percentEncoded: false)) else {
-            Diagnostics.error("Sparkle.framework not found next to the built binary at \(sparkleSrc.path(percentEncoded: false)).")
+            Diagnostics.error(
+                "Sparkle.framework not found next to the built binary at \(sparkleSrc.path(percentEncoded: false))."
+            )
             return
         }
         try fm.copyItem(at: sparkleSrc, to: frameworksDir.appending(component: "Sparkle.framework"))
-        guard run("/usr/bin/install_name_tool",
-                  ["-add_rpath", "@executable_path/../Frameworks",
-                   bundledBinary.path(percentEncoded: false)]) == 0 else {
+        guard
+            run(
+                "/usr/bin/install_name_tool",
+                [
+                    "-add_rpath", "@executable_path/../Frameworks",
+                    bundledBinary.path(percentEncoded: false),
+                ]) == 0
+        else {
             Diagnostics.error("install_name_tool failed to add the Frameworks rpath.")
             return
         }
@@ -80,8 +88,9 @@ struct BundleApp: CommandPlugin {
         let iconSrc = root.appending(component: "Icons").appending(component: "AppIcon.icns")
         let hasIcon = fm.fileExists(atPath: iconSrc.path(percentEncoded: false))
         if hasIcon {
-            try fm.copyItem(at: iconSrc,
-                            to: resourcesDir.appending(component: "AppIcon.icns"))
+            try fm.copyItem(
+                at: iconSrc,
+                to: resourcesDir.appending(component: "AppIcon.icns"))
         }
 
         // 3. Write Info.plist as a compiled *binary* property list — the format
@@ -104,8 +113,10 @@ struct BundleApp: CommandPlugin {
             info["CFBundleIconFile"] = "AppIcon"
             info["CFBundleIconName"] = "AppIcon"
         }
-        let infoData = try PropertyListSerialization.data(fromPropertyList: info, format: .binary, options: 0)
-        try infoData.write(to: bundle.appending(component: "Contents").appending(component: "Info.plist"))
+        let infoData = try PropertyListSerialization.data(
+            fromPropertyList: info, format: .binary, options: 0)
+        try infoData.write(
+            to: bundle.appending(component: "Contents").appending(component: "Info.plist"))
 
         // 4. Code signatures. With SIGN_IDENTITY set (a "Developer ID
         //    Application: …" identity) produce a real, distributable signature:
@@ -142,7 +153,8 @@ struct BundleApp: CommandPlugin {
         ]
         for (item, preserveEntitlements) in nested {
             guard codesign(item, preserveEntitlements: preserveEntitlements) else {
-                Diagnostics.error("codesign failed on \(item.lastPathComponent) (identity: \(signIdentity)).")
+                Diagnostics.error(
+                    "codesign failed on \(item.lastPathComponent) (identity: \(signIdentity)).")
                 return
             }
         }

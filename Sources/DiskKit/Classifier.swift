@@ -36,28 +36,33 @@ public enum Classifier {
     // MARK: - Manifest evidence
 
     private struct ManifestRule {
-        let manifest: String        // lowercased filename
-        let dirs: Set<String>       // lowercased dir names it regenerates
+        let manifest: String  // lowercased filename
+        let dirs: Set<String>  // lowercased dir names it regenerates
         let category: FileCategory
     }
 
     private static let manifestRules: [ManifestRule] = [
-        .init(manifest: "package.json",     dirs: ["node_modules"], category: .deps),
-        .init(manifest: "package.json",     dirs: ["dist", ".next", "out", ".turbo", ".nuxt", ".svelte-kit", ".parcel-cache"], category: .build),
-        .init(manifest: "cargo.toml",       dirs: ["target"], category: .build),
-        .init(manifest: "podfile",          dirs: ["pods"], category: .deps),
-        .init(manifest: "go.mod",           dirs: ["vendor"], category: .deps),
-        .init(manifest: "composer.json",    dirs: ["vendor"], category: .deps),
+        .init(manifest: "package.json", dirs: ["node_modules"], category: .deps),
+        .init(
+            manifest: "package.json",
+            dirs: ["dist", ".next", "out", ".turbo", ".nuxt", ".svelte-kit", ".parcel-cache"],
+            category: .build),
+        .init(manifest: "cargo.toml", dirs: ["target"], category: .build),
+        .init(manifest: "podfile", dirs: ["pods"], category: .deps),
+        .init(manifest: "go.mod", dirs: ["vendor"], category: .deps),
+        .init(manifest: "composer.json", dirs: ["vendor"], category: .deps),
         // Note: NOT vendor — a Ruby `vendor/` is hand-maintained, checked-in
         // content; `bundle install` regenerates `.bundle`, not `vendor/`.
-        .init(manifest: "gemfile",          dirs: [".bundle"], category: .deps),
-        .init(manifest: "pyproject.toml",   dirs: [".venv", "venv"], category: .deps),
+        .init(manifest: "gemfile", dirs: [".bundle"], category: .deps),
+        .init(manifest: "pyproject.toml", dirs: [".venv", "venv"], category: .deps),
         .init(manifest: "requirements.txt", dirs: [".venv", "venv"], category: .deps),
-        .init(manifest: "setup.py",         dirs: [".venv", "venv"], category: .deps),
-        .init(manifest: "pyproject.toml",   dirs: ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"], category: .cache),
-        .init(manifest: "build.gradle",     dirs: ["build", ".gradle"], category: .build),
-        .init(manifest: "settings.gradle",  dirs: ["build", ".gradle"], category: .build),
-        .init(manifest: "pubspec.yaml",     dirs: [".dart_tool", "build"], category: .build),
+        .init(manifest: "setup.py", dirs: [".venv", "venv"], category: .deps),
+        .init(
+            manifest: "pyproject.toml",
+            dirs: ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"], category: .cache),
+        .init(manifest: "build.gradle", dirs: ["build", ".gradle"], category: .build),
+        .init(manifest: "settings.gradle", dirs: ["build", ".gradle"], category: .build),
+        .init(manifest: "pubspec.yaml", dirs: [".dart_tool", "build"], category: .build),
     ]
 
     /// The hint for a child named `childName`, given the (lowercased) set of file
@@ -147,11 +152,13 @@ public enum Classifier {
     /// Finalize a directory's classification from its name, the hint its parent
     /// passed, the inherited override (if under a reclaim root), and whether it
     /// contains a verified `CACHEDIR.TAG`.
-    public static func classify(name: String,
-                                inherited: FileCategory?,
-                                hint: Hint,
-                                hasCachedirTag: Bool,
-                                parent: String? = nil) -> DirClass {
+    public static func classify(
+        name: String,
+        inherited: FileCategory?,
+        hint: Hint,
+        hasCachedirTag: Bool,
+        parent: String? = nil
+    ) -> DirClass {
         // Descendant of a reclaim root: attributed to the override, never its own
         // separate target.
         if let inherited {
@@ -159,15 +166,19 @@ public enum Classifier {
         }
         // Manifest evidence — strongest, most specific category.
         if let manifest = hint.manifest, let cat = hint.category {
-            return DirClass(category: cat, filesAs: cat,
-                            reclaim: ReclaimMark(confidence: .high, signal: .manifest(manifest),
-                                                 reason: "regenerable — \(manifest) is alongside it"))
+            return DirClass(
+                category: cat, filesAs: cat,
+                reclaim: ReclaimMark(
+                    confidence: .high, signal: .manifest(manifest),
+                    reason: "regenerable — \(manifest) is alongside it"))
         }
         // Verified cache marker.
         if hasCachedirTag {
-            return DirClass(category: .cache, filesAs: .cache,
-                            reclaim: ReclaimMark(confidence: .high, signal: .cachedirTag,
-                                                 reason: "marked as a cache (CACHEDIR.TAG)"))
+            return DirClass(
+                category: .cache, filesAs: .cache,
+                reclaim: ReclaimMark(
+                    confidence: .high, signal: .cachedirTag,
+                    reason: "marked as a cache (CACHEDIR.TAG)"))
         }
         // Curated name fallback.
         let k = classifyName(name)
@@ -175,18 +186,22 @@ public enum Classifier {
         // (`~/Library/Caches`, and every app sandbox container's
         // `Data/Library/Caches`) — an unambiguous, system-rebuilt location. That
         // context lifts the bare name's medium to high.
-        let isSystemCacheRoot = parent?.lowercased() == "library"
+        let isSystemCacheRoot =
+            parent?.lowercased() == "library"
             && ["caches", "cache", ".cache"].contains(name.lowercased())
         let mark = k.reclaim.map { conf in
             isSystemCacheRoot
-                ? ReclaimMark(confidence: .high, signal: .knownName,
-                              reason: "macOS cache directory (Library/Caches) — the system rebuilds it")
-                : ReclaimMark(confidence: conf, signal: .knownName,
-                              reason: "known \(k.category.label.lowercased()) directory")
+                ? ReclaimMark(
+                    confidence: .high, signal: .knownName,
+                    reason: "macOS cache directory (Library/Caches) — the system rebuilds it")
+                : ReclaimMark(
+                    confidence: conf, signal: .knownName,
+                    reason: "known \(k.category.label.lowercased()) directory")
         }
-        return DirClass(category: k.category,
-                        filesAs: k.overridesChildren ? k.category : nil,
-                        reclaim: mark)
+        return DirClass(
+            category: k.category,
+            filesAs: k.overridesChildren ? k.category : nil,
+            reclaim: mark)
     }
 
     // MARK: - Files
@@ -195,15 +210,15 @@ public enum Classifier {
     public static func classifyFile(ext: String) -> FileCategory {
         switch ext {
         case "mp4", "mov", "mkv", "avi", "m4v", "webm",
-             "jpg", "jpeg", "png", "gif", "heic", "heif", "webp", "tiff", "raw", "psd",
-             "mp3", "wav", "flac", "aac", "m4a", "aiff":
+            "jpg", "jpeg", "png", "gif", "heic", "heif", "webp", "tiff", "raw", "psd",
+            "mp3", "wav", "flac", "aac", "m4a", "aiff":
             return .media
         case "swift", "ts", "tsx", "js", "jsx", "mjs", "py", "rs", "go", "rb", "php",
-             "c", "cc", "cpp", "h", "hpp", "java", "kt", "cs", "scala", "sh", "lua",
-             "html", "css", "scss", "json", "yaml", "yml", "toml", "xml", "sql":
+            "c", "cc", "cpp", "h", "hpp", "java", "kt", "cs", "scala", "sh", "lua",
+            "html", "css", "scss", "json", "yaml", "yml", "toml", "xml", "sql":
             return .code
         case "pdf", "doc", "docx", "pages", "txt", "md", "rtf", "key", "numbers",
-             "xls", "xlsx", "ppt", "pptx", "csv", "epub", "tex":
+            "xls", "xlsx", "ppt", "pptx", "csv", "epub", "tex":
             return .docs
         case "app":
             return .app

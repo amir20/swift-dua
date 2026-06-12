@@ -1,6 +1,7 @@
 import XCTest
-@testable import Halo
+
 @testable import DiskKit
+@testable import Halo
 
 @MainActor
 final class ScanModelReclaimTests: XCTestCase {
@@ -9,19 +10,31 @@ final class ScanModelReclaimTests: XCTestCase {
 
     /// alex/{Library/Caches[high], Projects/app/{node_modules[high], build[medium]}}
     private func makeTree() -> DirNode {
-        let caches = DirNode(name: "Caches", category: .cache,
-            reclaim: ReclaimMark(confidence: .high, signal: .knownName, reason: "macOS cache directory"),
+        let caches = DirNode(
+            name: "Caches", category: .cache,
+            reclaim: ReclaimMark(
+                confidence: .high, signal: .knownName, reason: "macOS cache directory"),
             fileBytes: [.cache: 200 * GB], children: [])
-        let library = DirNode(name: "Library", category: .other, reclaim: nil, fileBytes: [:], children: [caches])
-        let nodeModules = DirNode(name: "node_modules", category: .deps,
-            reclaim: ReclaimMark(confidence: .high, signal: .manifest("package.json"), reason: "regenerable"),
+        let library = DirNode(
+            name: "Library", category: .other, reclaim: nil, fileBytes: [:], children: [caches])
+        let nodeModules = DirNode(
+            name: "node_modules", category: .deps,
+            reclaim: ReclaimMark(
+                confidence: .high, signal: .manifest("package.json"), reason: "regenerable"),
             fileBytes: [.deps: 1 * GB], children: [])
-        let build = DirNode(name: "build", category: .build,
-            reclaim: ReclaimMark(confidence: .medium, signal: .knownName, reason: "known build dir"),
+        let build = DirNode(
+            name: "build", category: .build,
+            reclaim: ReclaimMark(
+                confidence: .medium, signal: .knownName, reason: "known build dir"),
             fileBytes: [.build: 300 * MB], children: [])
-        let app = DirNode(name: "app", category: .other, reclaim: nil, fileBytes: [:], children: [nodeModules, build])
-        let projects = DirNode(name: "Projects", category: .other, reclaim: nil, fileBytes: [:], children: [app])
-        return DirNode(name: "alex", category: .other, reclaim: nil, fileBytes: [:], children: [library, projects])
+        let app = DirNode(
+            name: "app", category: .other, reclaim: nil, fileBytes: [:],
+            children: [nodeModules, build])
+        let projects = DirNode(
+            name: "Projects", category: .other, reclaim: nil, fileBytes: [:], children: [app])
+        return DirNode(
+            name: "alex", category: .other, reclaim: nil, fileBytes: [:],
+            children: [library, projects])
     }
 
     private func find(_ n: DirNode, _ name: String) -> DirNode? {
@@ -33,17 +46,21 @@ final class ScanModelReclaimTests: XCTestCase {
         let root = makeTree()
         model.load(root, rootPath: "/Users/alex")
         XCTAssertEqual(model.absoluteURL(for: root).path, "/Users/alex")
-        XCTAssertEqual(model.absoluteURL(for: find(root, "Caches")!).path, "/Users/alex/Library/Caches")
-        XCTAssertEqual(model.absoluteURL(for: find(root, "node_modules")!).path,
-                       "/Users/alex/Projects/app/node_modules")
+        XCTAssertEqual(
+            model.absoluteURL(for: find(root, "Caches")!).path, "/Users/alex/Library/Caches")
+        XCTAssertEqual(
+            model.absoluteURL(for: find(root, "node_modules")!).path,
+            "/Users/alex/Projects/app/node_modules")
     }
 
     func testReclaimPlanSortedWithPreselectionAndLabels() {
         let model = ScanModel()
         model.load(makeTree(), rootPath: "/Users/alex")
         let plan = model.reclaimPlan
-        XCTAssertEqual(plan.map(\.name), ["Caches", "node_modules", "build"], "sorted by size desc")
-        XCTAssertEqual(plan.map(\.preselected), [true, true, false], "high pre-selected, medium not")
+        XCTAssertEqual(
+            plan.map(\.name), ["Caches", "node_modules", "build"], "sorted by size desc")
+        XCTAssertEqual(
+            plan.map(\.preselected), [true, true, false], "high pre-selected, medium not")
         XCTAssertEqual(plan.map(\.signalLabel), ["Caches", "package.json", "Build output"])
         XCTAssertEqual(plan[0].url.path, "/Users/alex/Library/Caches")
         XCTAssertEqual(plan[0].confidence, .high)
@@ -56,10 +73,12 @@ final class ScanModelReclaimTests: XCTestCase {
     func testResolvePathFollowsNamesAndStopsAtMissing() {
         let root = makeTree()
         XCTAssertEqual(ScanModel.resolvePath(from: root, names: []).map(\.name), ["alex"])
-        XCTAssertEqual(ScanModel.resolvePath(from: root, names: ["Library", "Caches"]).map(\.name),
-                       ["alex", "Library", "Caches"])
-        XCTAssertEqual(ScanModel.resolvePath(from: root, names: ["Library", "Gone", "Deeper"]).map(\.name),
-                       ["alex", "Library"], "stops at the first missing component")
+        XCTAssertEqual(
+            ScanModel.resolvePath(from: root, names: ["Library", "Caches"]).map(\.name),
+            ["alex", "Library", "Caches"])
+        XCTAssertEqual(
+            ScanModel.resolvePath(from: root, names: ["Library", "Gone", "Deeper"]).map(\.name),
+            ["alex", "Library"], "stops at the first missing component")
     }
 
     /// Drilled into a subtree, the plan only covers that subtree's targets.
@@ -75,13 +94,18 @@ final class ScanModelReclaimTests: XCTestCase {
     /// inheritance (`reclaim == nil`). Navigating *into* `uv` must still treat the
     /// whole folder as a safe target, with the confidence of the enclosing root.
     private func makeCacheTree() -> DirNode {
-        let archive = DirNode(name: "archive-v0", category: .cache,
-                              reclaim: nil, fileBytes: [.cache: 8 * GB], children: [])
-        let uv = DirNode(name: "uv", category: .cache, reclaim: nil, fileBytes: [:], children: [archive])
-        let cache = DirNode(name: ".cache", category: .cache,
-            reclaim: ReclaimMark(confidence: .medium, signal: .knownName, reason: "known cache directory"),
+        let archive = DirNode(
+            name: "archive-v0", category: .cache,
+            reclaim: nil, fileBytes: [.cache: 8 * GB], children: [])
+        let uv = DirNode(
+            name: "uv", category: .cache, reclaim: nil, fileBytes: [:], children: [archive])
+        let cache = DirNode(
+            name: ".cache", category: .cache,
+            reclaim: ReclaimMark(
+                confidence: .medium, signal: .knownName, reason: "known cache directory"),
             fileBytes: [:], children: [uv])
-        return DirNode(name: "alex", category: .other, reclaim: nil, fileBytes: [:], children: [cache])
+        return DirNode(
+            name: "alex", category: .other, reclaim: nil, fileBytes: [:], children: [cache])
     }
 
     func testReclaimPlanListsChildrenWhenViewingInsideAReclaimRoot() {
@@ -91,11 +115,13 @@ final class ScanModelReclaimTests: XCTestCase {
         model.jump(to: find(root, "uv")!)
 
         XCTAssertEqual(model.current?.name, "uv")
-        XCTAssertEqual(model.reclaimPlan.map(\.name), ["archive-v0"],
-                       "the plan offers the current folder's children, not the folder itself")
+        XCTAssertEqual(
+            model.reclaimPlan.map(\.name), ["archive-v0"],
+            "the plan offers the current folder's children, not the folder itself")
         XCTAssertEqual(model.reclTotal, find(root, "archive-v0")!.size)
-        XCTAssertEqual(model.reclaimPlan.first?.confidence, .medium,
-                       "confidence is inherited from the enclosing .cache root")
+        XCTAssertEqual(
+            model.reclaimPlan.first?.confidence, .medium,
+            "confidence is inherited from the enclosing .cache root")
         XCTAssertEqual(model.reclaimPlan.first?.url.path, "/Users/alex/.cache/uv/archive-v0")
     }
 
@@ -133,14 +159,16 @@ final class ScanModelReclaimTests: XCTestCase {
         let sizeBefore = model.root!.size
         let nm = find(root, "node_modules")!
 
-        model.applyReclaimResult(trashedIDs: [nm.id],
-                                 outcome: ReclaimOutcome(trashed: 1, failed: 0))
+        model.applyReclaimResult(
+            trashedIDs: [nm.id],
+            outcome: ReclaimOutcome(trashed: 1, failed: 0))
 
         XCTAssertFalse(model.scanning, "pruning must not start a rescan")
         XCTAssertEqual(model.current?.name, "app", "the user stays where they were")
         XCTAssertEqual(model.root?.size, sizeBefore - nm.size, "sizes shrink immediately")
-        XCTAssertFalse(model.reclaimPlan.contains { $0.name == "node_modules" },
-                       "the trashed target is no longer offered")
+        XCTAssertFalse(
+            model.reclaimPlan.contains { $0.name == "node_modules" },
+            "the trashed target is no longer offered")
         XCTAssertEqual(model.lastReclaim?.trashed, 1)
     }
 
@@ -153,8 +181,9 @@ final class ScanModelReclaimTests: XCTestCase {
         let nm = find(root, "node_modules")!
         model.jump(to: nm)
 
-        model.applyReclaimResult(trashedIDs: [nm.id],
-                                 outcome: ReclaimOutcome(trashed: 1, failed: 0))
+        model.applyReclaimResult(
+            trashedIDs: [nm.id],
+            outcome: ReclaimOutcome(trashed: 1, failed: 0))
 
         XCTAssertEqual(model.current?.name, "app", "lands on the surviving parent")
     }
@@ -166,9 +195,10 @@ final class ScanModelReclaimTests: XCTestCase {
         let model = ScanModel()
         let root = makeTree()
         model.load(root, rootPath: "/Users/alex")
-        model.jump(to: find(root, "Caches")!)   // path: alex / Library / Caches
-        XCTAssertEqual(model.crumbs, ["~", "Library", "Caches"],
-                       "no fabricated volume crumb for an in-memory tree")
+        model.jump(to: find(root, "Caches")!)  // path: alex / Library / Caches
+        XCTAssertEqual(
+            model.crumbs, ["~", "Library", "Caches"],
+            "no fabricated volume crumb for an in-memory tree")
         model.goTo(crumb: 1)
         XCTAssertEqual(model.current?.name, "Library", "crumb 1 is Library")
         model.goTo(crumb: 0)
@@ -204,8 +234,10 @@ final class ReclaimerTests: XCTestCase {
 
         // Best-effort cleanup: the unique name can't collide, so it lands in
         // ~/.Trash under the same name.
-        if let trash = try? fm.url(for: .trashDirectory, in: .userDomainMask,
-                                   appropriateFor: nil, create: false) {
+        if let trash = try? fm.url(
+            for: .trashDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: false)
+        {
             try? fm.removeItem(at: trash.appendingPathComponent(name))
         }
     }

@@ -66,8 +66,11 @@ struct HeaderView: View {
             ForEach(Array(model.crumbs.enumerated()), id: \.offset) { i, c in
                 let last = i == model.crumbs.count - 1
                 Text(c)
-                    .font(.system(size: 13, weight: last ? .semibold : .medium,
-                                  design: i > 0 ? .monospaced : .default))
+                    .font(
+                        .system(
+                            size: 13, weight: last ? .semibold : .medium,
+                            design: i > 0 ? .monospaced : .default)
+                    )
                     .foregroundStyle(last ? Palette.ink : Palette.ink3)
                     // goTo ignores the decorative volume crumb itself.
                     .onTapGesture { if !last { model.goTo(crumb: i) } }

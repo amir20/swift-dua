@@ -1,5 +1,5 @@
-import SwiftUI
 import DiskKit
+import SwiftUI
 
 struct ContentView: View {
     @Bindable var model: ScanModel
@@ -18,9 +18,10 @@ struct ContentView: View {
 
     private var stage: some View {
         ZStack {
-            RadialGradient(colors: [Palette.bg, Palette.bg2],
-                           center: .init(x: 0.5, y: 0.42),
-                           startRadius: 0, endRadius: 380)
+            RadialGradient(
+                colors: [Palette.bg, Palette.bg2],
+                center: .init(x: 0.5, y: 0.42),
+                startRadius: 0, endRadius: 380)
 
             if model.root != nil {
                 DonutView(model: model)

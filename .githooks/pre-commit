@@ -1,0 +1,8 @@
+#!/bin/sh
+# Auto-format staged Swift files before committing (rules in .swift-format).
+# Enable once per clone with:  git config core.hooksPath .githooks
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.swift')
+[ -z "$files" ] && exit 0
+
+echo "$files" | xargs xcrun swift-format -i
+echo "$files" | xargs git add

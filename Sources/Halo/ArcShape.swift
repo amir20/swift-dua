@@ -14,14 +14,19 @@ struct ArcShape: Shape {
 
     var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(endAngle, Double(outerRadius)) }
-        set { endAngle = newValue.first; outerRadius = CGFloat(newValue.second) }
+        set {
+            endAngle = newValue.first
+            outerRadius = CGFloat(newValue.second)
+        }
     }
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
         guard endAngle > startAngle + 0.0002 else { return p }
-        let a0 = Angle.radians(startAngle), a1 = Angle.radians(endAngle)
-        p.addArc(center: center, radius: outerRadius, startAngle: a0, endAngle: a1, clockwise: false)
+        let a0 = Angle.radians(startAngle)
+        let a1 = Angle.radians(endAngle)
+        p.addArc(
+            center: center, radius: outerRadius, startAngle: a0, endAngle: a1, clockwise: false)
         p.addLine(to: point(innerRadius, endAngle))
         p.addArc(center: center, radius: innerRadius, startAngle: a1, endAngle: a0, clockwise: true)
         p.closeSubpath()

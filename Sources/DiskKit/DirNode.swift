@@ -34,11 +34,13 @@ public final class DirNode: Identifiable, @unchecked Sendable {
 
     public var id: ObjectIdentifier { ObjectIdentifier(self) }
 
-    public init(name: String,
-                category: FileCategory,
-                reclaim: ReclaimMark?,
-                fileBytes: [FileCategory: Int64],
-                children: [DirNode]) {
+    public init(
+        name: String,
+        category: FileCategory,
+        reclaim: ReclaimMark?,
+        fileBytes: [FileCategory: Int64],
+        children: [DirNode]
+    ) {
         self.name = name
         self.category = category
         self.reclaim = reclaim
@@ -52,14 +54,19 @@ public final class DirNode: Identifiable, @unchecked Sendable {
     /// `MockTree` and tests. `true` synthesizes a generic **medium**-confidence
     /// mark; `false` maps to `nil`. Medium deliberately: a bare boolean carries no
     /// evidence, so it must never fabricate the auto-purge-eligible `.high` tier.
-    public convenience init(name: String,
-                            category: FileCategory,
-                            isReclaimable: Bool,
-                            fileBytes: [FileCategory: Int64],
-                            children: [DirNode]) {
-        self.init(name: name, category: category,
-                  reclaim: isReclaimable ? ReclaimMark(confidence: .medium, signal: .knownName,
-                                                       reason: "reclaimable") : nil,
-                  fileBytes: fileBytes, children: children)
+    public convenience init(
+        name: String,
+        category: FileCategory,
+        isReclaimable: Bool,
+        fileBytes: [FileCategory: Int64],
+        children: [DirNode]
+    ) {
+        self.init(
+            name: name, category: category,
+            reclaim: isReclaimable
+                ? ReclaimMark(
+                    confidence: .medium, signal: .knownName,
+                    reason: "reclaimable") : nil,
+            fileBytes: fileBytes, children: children)
     }
 }

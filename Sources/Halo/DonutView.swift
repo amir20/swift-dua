@@ -1,5 +1,5 @@
-import SwiftUI
 import DiskKit
+import SwiftUI
 
 struct DonutView: View {
     @Bindable var model: ScanModel
@@ -7,14 +7,14 @@ struct DonutView: View {
 
     // Geometry from the design (460-pt coordinate space, center 230,230).
     private let side: CGFloat = 460
-    private let r0: CGFloat = 122     // inner
-    private let r1: CGFloat = 196     // outer
-    private let rc0: CGFloat = 200    // amber inner
-    private let rc1: CGFloat = 207    // amber outer
-    private let ringRadius: CGFloat = 115   // activity ring radius (hugs the hole edge)
+    private let r0: CGFloat = 122  // inner
+    private let r1: CGFloat = 196  // outer
+    private let rc0: CGFloat = 200  // amber inner
+    private let rc1: CGFloat = 207  // amber outer
+    private let ringRadius: CGFloat = 115  // activity ring radius (hugs the hole edge)
     private let ringWidth: CGFloat = 5
-    private let ringArc: CGFloat = 0.18      // fraction of the circle the comet covers
-    private let ringPeriod: Double = 1.15    // seconds per revolution
+    private let ringArc: CGFloat = 0.18  // fraction of the circle the comet covers
+    private let ringPeriod: Double = 1.15  // seconds per revolution
 
     var body: some View {
         ZStack {
@@ -74,12 +74,14 @@ struct DonutView: View {
     private func slice(_ arc: Arc) -> some View {
         let a0 = arc.a0 + arc.gap / 2
         let a1Full = max(a0 + 0.002, arc.a1 - arc.gap / 2)
-        let isHover = model.hover == arc.seg.id
+        let isHover =
+            model.hover == arc.seg.id
             || (model.mode == .type && model.expanded == arc.seg.category)
         let dimmed = (model.hover != nil || model.expanded != nil) && !isHover
         let outer = isHover ? r1 + 9 : r1
         let end = swept ? a1Full : a0
-        let recFrac = arc.seg.size > 0
+        let recFrac =
+            arc.seg.size > 0
             ? min(max(Double(arc.seg.recl) / Double(arc.seg.size), 0), 1) : 0
 
         ZStack {
@@ -88,19 +90,24 @@ struct DonutView: View {
             ArcShape(innerRadius: r0, outerRadius: outer, startAngle: a0, endAngle: end)
                 .stroke(Palette.bg, lineWidth: 2)
             if recFrac > 0.001 {
-                ArcShape(innerRadius: rc0, outerRadius: rc1,
-                         startAngle: a0,
-                         endAngle: swept ? a0 + (a1Full - a0) * recFrac : a0)
-                    .fill(Palette.reclaim)
+                ArcShape(
+                    innerRadius: rc0, outerRadius: rc1,
+                    startAngle: a0,
+                    endAngle: swept ? a0 + (a1Full - a0) * recFrac : a0
+                )
+                .fill(Palette.reclaim)
             }
         }
         .opacity(dimmed ? 0.32 : 1)
-        .allowsHitTesting(false)   // hover & tap are resolved by angle at the donut level
+        .allowsHitTesting(false)  // hover & tap are resolved by angle at the donut level
         // Hit-testing is geometric, which leaves VoiceOver nothing to land on —
         // expose each slice as its own actionable element.
         .accessibilityElement()
-        .accessibilityLabel(Text(
-            "\(arc.seg.label), \(formatSize(arc.seg.size)), \(percent(arc.seg.size, of: model.total).clean) percent"))
+        .accessibilityLabel(
+            Text(
+                "\(arc.seg.label), \(formatSize(arc.seg.size)), \(percent(arc.seg.size, of: model.total).clean) percent"
+            )
+        )
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { model.tapSegment(arc.seg) }
     }
@@ -115,12 +122,15 @@ struct DonutView: View {
     private var progressRing: some View {
         if model.showRing {
             TimelineView(.animation) { ctx in
-                let turn = ctx.date.timeIntervalSinceReferenceDate
+                let turn =
+                    ctx.date.timeIntervalSinceReferenceDate
                     .truncatingRemainder(dividingBy: ringPeriod) / ringPeriod
                 Circle()
                     .trim(from: 0, to: ringArc)
-                    .stroke(Palette.progress,
-                            style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                    .stroke(
+                        Palette.progress,
+                        style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
+                    )
                     .frame(width: ringRadius * 2, height: ringRadius * 2)
                     .rotationEffect(.radians(turn * 2 * .pi))
             }
@@ -188,11 +198,13 @@ extension Double {
 /// ring radii `r0`/`r1`, or `nil` outside the ring band. Angles follow `Arc`:
 /// 12 o'clock = -π/2, increasing clockwise. Kept pure so the hover hit-test is
 /// unit-testable without a live view.
-func hitTestArc(at p: CGPoint, in arcs: [Arc], center: CGFloat, r0: CGFloat, r1: CGFloat) -> String? {
-    let dx = p.x - center, dy = p.y - center
+func hitTestArc(at p: CGPoint, in arcs: [Arc], center: CGFloat, r0: CGFloat, r1: CGFloat) -> String?
+{
+    let dx = p.x - center
+    let dy = p.y - center
     let r = sqrt(dx * dx + dy * dy)
     guard r >= r0, r <= r1 + 9 else { return nil }
     var theta = atan2(dy, dx)
-    if theta < -Double.pi / 2 { theta += 2 * .pi }   // wrap into [-π/2, 3π/2)
+    if theta < -Double.pi / 2 { theta += 2 * .pi }  // wrap into [-π/2, 3π/2)
     return arcs.first { theta >= $0.a0 && theta < $0.a1 }?.seg.id
 }

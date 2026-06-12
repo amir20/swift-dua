@@ -46,7 +46,7 @@ public enum Derive {
         func walk(_ n: DirNode) {
             if n !== root, n.category == cat, n.parent?.category != cat {
                 result.append((n, n.size, reclaimBytes(n)))
-                return   // this whole subtree is the location; don't descend further
+                return  // this whole subtree is the location; don't descend further
             }
             n.children.forEach(walk)
         }
@@ -78,8 +78,9 @@ public enum Derive {
             }
         }
         guard changed else { return root }
-        return DirNode(name: root.name, category: root.category, reclaim: root.reclaim,
-                       fileBytes: root.fileBytes, children: kept)
+        return DirNode(
+            name: root.name, category: root.category, reclaim: root.reclaim,
+            fileBytes: root.fileBytes, children: kept)
     }
 
     // MARK: - Path
@@ -88,7 +89,10 @@ public enum Derive {
     public static func pathTo(_ n: DirNode) -> [DirNode] {
         var chain: [DirNode] = []
         var x: DirNode? = n
-        while let node = x { chain.insert(node, at: 0); x = node.parent }
+        while let node = x {
+            chain.insert(node, at: 0)
+            x = node.parent
+        }
         return chain
     }
 }

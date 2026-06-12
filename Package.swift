@@ -8,7 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "Halo", targets: ["Halo"]),
-        .library(name: "DiskKit", targets: ["DiskKit"])
+        .library(name: "DiskKit", targets: ["DiskKit"]),
     ],
     dependencies: [
         // Auto-update. The only external dependency — replacing a running,
@@ -28,7 +28,7 @@ let package = Package(
             name: "Halo",
             dependencies: [
                 "DiskKit",
-                .product(name: "Sparkle", package: "Sparkle")
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/Halo"
         ),
@@ -47,7 +47,8 @@ let package = Package(
             capability: .command(
                 intent: .custom(
                     verb: "bundle-app",
-                    description: "Build a release binary and package it into a double-clickable .app bundle"
+                    description:
+                        "Build a release binary and package it into a double-clickable .app bundle"
                 ),
                 permissions: [
                     .writeToPackageDirectory(
@@ -55,6 +56,6 @@ let package = Package(
                     )
                 ]
             )
-        )
+        ),
     ]
 )

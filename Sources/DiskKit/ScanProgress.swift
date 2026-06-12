@@ -10,7 +10,10 @@ public final class ScanProgress: Sendable {
     public init() {}
 
     public func add(files: Int, bytes: Int64) {
-        state.withLock { $0.files += files; $0.bytes += bytes }
+        state.withLock {
+            $0.files += files
+            $0.bytes += bytes
+        }
     }
 
     public func addSkippedDir() {
