@@ -110,6 +110,9 @@ final class ScanModel {
     /// that its scope is gone and drop its result instead of overwriting a newer
     /// one (or a folder it no longer describes).
     private var summaryEpoch = 0
+    /// The in-flight summary request, cancelled when a newer scope supersedes it
+    /// so rapid drill-through never piles up concurrent on-device inferences.
+    private var summaryTask: Task<Void, Never>?
     /// Drives the reclaim confirmation sheet.
     var showReclaimSheet = false
     /// Result of the most recent reclaim, for a brief footer note.
@@ -679,7 +682,8 @@ final class ScanModel {
             let n = reclaimTargets.count
             lines.append(
                 "Safely reclaimable in total: \(formatSize(reclTotal)) "
-                    + "across \(n) target\(n == 1 ? "" : "s") (caches, build output, dependencies, trash).")
+                    + "across \(n) target\(n == 1 ? "" : "s") (caches, build output, dependencies, trash)."
+            )
         } else {
             lines.append("Nothing here is flagged as safely reclaimable.")
         }
@@ -691,7 +695,6 @@ final class ScanModel {
     /// shows nothing) when the model can't run or generation fails — the feature
     /// only ever surfaces a finished summary, never an error or a prompt.
     private func generateSummary() {
-        if case .loading = summaryState { return }
         guard SummaryService.isAvailable else {
             summaryState = .idle
             return
@@ -699,10 +702,11 @@ final class ScanModel {
         let facts = summaryFacts()
         let epoch = summaryEpoch
         summaryState = .loading
-        Task {
+        summaryTask?.cancel()
+        summaryTask = Task {
             let insight = try? await SummaryService.summarize(facts)
             // A navigation/rescan since we started moved us off this scope.
-            guard self.summaryEpoch == epoch else { return }
+            guard !Task.isCancelled, self.summaryEpoch == epoch else { return }
             self.summaryState = insight.map(SummaryState.ready) ?? .idle
         }
     }

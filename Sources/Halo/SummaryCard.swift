@@ -5,7 +5,7 @@ import SwiftUI
 /// reads like a native part of the app — no controls, no branding, and nothing
 /// at all when there's no summary to show.
 struct SummaryCard: View {
-    @Bindable var model: ScanModel
+    var model: ScanModel
 
     var body: some View {
         switch model.summaryState {
