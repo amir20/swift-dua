@@ -45,9 +45,12 @@ enum ScanEvent: Sendable {
     case done
 }
 
-/// Summary of a completed reclaim, for a brief confirmation note.
+/// Summary of a completed reclaim, for a brief confirmation note. `trashed` and
+/// `deleted` are kept apart because items already in the Trash are removed
+/// permanently (not moved), so the note can say so honestly.
 struct ReclaimOutcome {
     let trashed: Int
+    let deleted: Int
     let failed: Int
 }
 
@@ -609,7 +612,8 @@ final class ScanModel {
             let goneURLs = Set(trashResult.trashed).union(deleteResult.removed)
             let ids = Set(items.filter { goneURLs.contains($0.url) }.map(\.id))
             let outcome = ReclaimOutcome(
-                trashed: trashResult.trashed.count + deleteResult.removed.count,
+                trashed: trashResult.trashed.count,
+                deleted: deleteResult.removed.count,
                 failed: trashResult.failed.count + deleteResult.failed.count)
             await MainActor.run { self.applyReclaimResult(trashedIDs: ids, outcome: outcome) }
         }

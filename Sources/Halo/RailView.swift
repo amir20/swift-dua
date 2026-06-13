@@ -189,8 +189,14 @@ struct RailView: View {
 
     private var reclaimResultNote: String? {
         guard let r = model.lastReclaim else { return nil }
-        var note = "Moved \(r.trashed) to Trash"
-        if r.failed > 0 { note += " · \(r.failed) couldn't be removed" }
-        return note
+        // Trash and permanent deletes are reported separately — items already in
+        // the Trash were removed for good, not "moved to Trash".
+        var parts: [String] = []
+        if r.trashed > 0 { parts.append("Moved \(r.trashed) to Trash") }
+        if r.deleted > 0 {
+            parts.append(parts.isEmpty ? "Deleted \(r.deleted)" : "deleted \(r.deleted)")
+        }
+        if r.failed > 0 { parts.append("\(r.failed) couldn't be removed") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

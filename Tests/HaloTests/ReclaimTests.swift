@@ -161,7 +161,7 @@ final class ScanModelReclaimTests: XCTestCase {
 
         model.applyReclaimResult(
             trashedIDs: [nm.id],
-            outcome: ReclaimOutcome(trashed: 1, failed: 0))
+            outcome: ReclaimOutcome(trashed: 1, deleted: 0, failed: 0))
 
         XCTAssertFalse(model.scanning, "pruning must not start a rescan")
         XCTAssertEqual(model.current?.name, "app", "the user stays where they were")
@@ -183,7 +183,7 @@ final class ScanModelReclaimTests: XCTestCase {
 
         model.applyReclaimResult(
             trashedIDs: [nm.id],
-            outcome: ReclaimOutcome(trashed: 1, failed: 0))
+            outcome: ReclaimOutcome(trashed: 1, deleted: 0, failed: 0))
 
         XCTAssertEqual(model.current?.name, "app", "lands on the surviving parent")
     }
