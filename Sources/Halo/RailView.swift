@@ -6,15 +6,14 @@ struct RailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(headerText.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(Palette.ink4)
-                Spacer()
+            header
+
+            // Plain-language overview of the current scope. Only meaningful once a
+            // scan has produced segments to describe; it generates itself.
+            if !model.scanning && !model.segments.isEmpty {
+                SummaryCard(model: model)
+                    .animation(.easeInOut(duration: 0.3), value: model.summaryState)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16).padding(.bottom, 8)
 
             ScrollView {
                 LazyVStack(spacing: 1) {
@@ -34,6 +33,29 @@ struct RailView: View {
         .frame(width: 320)
         .background(Palette.bg2)
         .overlay(alignment: .leading) { Divider().overlay(Palette.line) }
+    }
+
+    /// The rail's section label plus, when the scan couldn't read everything,
+    /// a quiet coverage caveat — but only when the Full Disk Access banner isn't
+    /// already making the same point up top. Banner owns the *ask*, this owns the
+    /// *fact*, so the two never repeat each other.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(headerText.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(Palette.ink4)
+            if model.skippedDirs > 0 && !model.showFDABanner {
+                Text(
+                    "\(model.skippedDirs) folder\(model.skippedDirs == 1 ? "" : "s") couldn't be read"
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.ink4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 16).padding(.bottom, 8)
     }
 
     private var headerText: String {
@@ -124,8 +146,7 @@ struct RailView: View {
     }
 
     private var footer: some View {
-        let n = model.reclaimTargets.count
-        let enabled = n > 0
+        let enabled = !model.reclaimTargets.isEmpty
         return VStack(spacing: 7) {
             Button {
                 model.showReclaimSheet = true
@@ -146,12 +167,17 @@ struct RailView: View {
             .disabled(!enabled)
             .opacity(enabled ? 1 : 0.4)
 
-            Text(footerNote(n))
-                .font(.system(size: 11))
-                .foregroundStyle(
-                    (model.lastReclaim?.failed ?? 0) > 0 ? Palette.reclaim : Palette.ink4)
+            // Only ever a transient result of the last reclaim — the "what's safe /
+            // recoverable" reassurance lives in the reclaim sheet, where the user
+            // actually makes the decision.
+            if let note = reclaimResultNote {
+                Text(note)
+                    .font(.system(size: 11))
+                    .foregroundStyle(
+                        (model.lastReclaim?.failed ?? 0) > 0 ? Palette.reclaim : Palette.ink4)
+            }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 10).padding(.vertical, 12)
         .overlay(alignment: .top) { Divider().overlay(Palette.line) }
         .sheet(isPresented: $model.showReclaimSheet) {
             ReclaimSheet(
@@ -161,17 +187,10 @@ struct RailView: View {
         }
     }
 
-    private func footerNote(_ n: Int) -> String {
-        var note: String
-        if let r = model.lastReclaim {
-            note = "Moved \(r.trashed) to Trash"
-            if r.failed > 0 { note += " · \(r.failed) couldn't be removed" }
-        } else {
-            note = "\(n) safe target\(n == 1 ? "" : "s") · everything moves to Trash first"
-        }
-        if model.skippedDirs > 0 {
-            note += " · \(model.skippedDirs) unreadable — grant Full Disk Access for a full picture"
-        }
+    private var reclaimResultNote: String? {
+        guard let r = model.lastReclaim else { return nil }
+        var note = "Moved \(r.trashed) to Trash"
+        if r.failed > 0 { note += " · \(r.failed) couldn't be removed" }
         return note
     }
 }

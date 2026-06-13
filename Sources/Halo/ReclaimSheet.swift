@@ -111,9 +111,11 @@ struct ReclaimSheet: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Text("\(chosen.count) of \(plan.count) selected · \(formatSize(total))")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.ink3)
+            Text(
+                "\(chosen.count) of \(plan.count) safe target\(plan.count == 1 ? "" : "s") selected · \(formatSize(total))"
+            )
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.ink3)
             Spacer()
             Button("Cancel", action: onCancel)
                 .buttonStyle(.glass)

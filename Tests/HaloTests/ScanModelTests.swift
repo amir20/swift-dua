@@ -224,4 +224,53 @@ final class ScanModelTests: XCTestCase {
             model.current?.name, "com.apple.wallpaper.caches",
             "jump lands on the leaf, not its parent")
     }
+
+    // MARK: - Summary facts
+
+    /// The AI summary's prompt must describe the *current* scope using only the
+    /// figures the rail already shows, so the model can never reference a number
+    /// the user can't see. We test the fact-builder (pure, deterministic), not
+    /// the on-device model (which can't run headlessly).
+    func testSummaryFactsDescribeFolderScope() {
+        let model = ScanModel()
+        model.load(MockTree.make())
+        let facts = model.summaryFacts()
+
+        XCTAssertTrue(facts.contains("Folder: ~"), "names the scanned root")
+        XCTAssertTrue(facts.contains("Total size:"), "states the total")
+        XCTAssertTrue(facts.contains("Largest items inside"), "folder-lens framing")
+        XCTAssertTrue(facts.contains("Safely reclaimable in total:"), "states reclaimable total")
+        // Every line's figure must be one the rail also renders for a segment.
+        for seg in model.segments.prefix(8) {
+            XCTAssertTrue(
+                facts.contains(seg.label), "facts mention the \(seg.label) segment")
+        }
+    }
+
+    /// Switching to the type lens reframes the facts as a per-type breakdown.
+    func testSummaryFactsFollowTheActiveLens() {
+        let model = ScanModel()
+        model.load(MockTree.make())
+        model.setMode(.type)
+        let facts = model.summaryFacts()
+
+        XCTAssertTrue(facts.contains("Breakdown by file type"), "type-lens framing")
+        XCTAssertFalse(facts.contains("Largest items inside"), "not the folder framing")
+    }
+
+    /// Drilling into a subfolder re-frames the facts around that folder, so the
+    /// auto-generated overview always describes the scope the user is looking at.
+    func testSummaryFactsFollowNavigation() {
+        let model = ScanModel()
+        model.load(MockTree.make())
+
+        guard let projects = model.current?.children.first(where: { $0.name == "Projects" })
+        else { return XCTFail("mock tree should contain a Projects folder") }
+        model.jump(to: projects)
+
+        let facts = model.summaryFacts()
+        XCTAssertTrue(facts.contains("Folder: Projects"), "facts name the drilled-into folder")
+        XCTAssertTrue(
+            facts.contains("acme-dashboard"), "facts list the children of the new scope")
+    }
 }
