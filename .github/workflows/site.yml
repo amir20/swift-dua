@@ -23,6 +23,10 @@ jobs:
         working-directory: docs
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history + tags so scripts/gen-changelog.mjs can derive the
+          # changelog from every release tag (default checkout is shallow).
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
         with:
           version: 11

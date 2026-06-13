@@ -1,9 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { folderHue } from '$lib/palette';
   import { toggleTheme } from '$lib/theme';
 
   const DMG = 'https://github.com/amir20/Halo.app/releases/latest/download/Halo.dmg';
+
+  // The section links are same-page anchors on the home page, but must route
+  // home first from any other page (e.g. /changelog). Derived from the path.
+  // (Widened to string so the comparison holds regardless of typed routes.)
+  const path = $derived(page.url.pathname as string);
+  const home = $derived(path === '/');
+  const onChangelog = $derived(path === '/changelog');
 
   // The pill stays hidden over the hero and fades in once it scrolls out.
   let visible = $state(false);
@@ -23,12 +31,15 @@
 </script>
 
 <nav class="pill glass" class:visible aria-label="Site">
-  <a class="brand" href="#top">
+  <a class="brand" href={home ? '#top' : '/'}>
     <span class="dot" style:background={folderHue(0)}></span>
     Halo
   </a>
-  <a href="#features">Features</a>
-  <a href="#how">How it works</a>
+  <a href={home ? '#features' : '/#features'}>Features</a>
+  <a href={home ? '#how' : '/#how'}>How it works</a>
+  <a href="/changelog" class:current={onChangelog} aria-current={onChangelog ? 'page' : undefined}>
+    Changelog
+  </a>
   <a href="https://github.com/amir20/Halo.app" target="_blank" rel="noopener">GitHub</a>
   <button class="toggle" type="button" onclick={toggleTheme} aria-label="Toggle light or dark theme">
     <svg class="sun" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
@@ -105,6 +116,12 @@
       color: var(--ink);
       background: var(--hover-bg);
     }
+  }
+
+  /* Active page (e.g. Changelog) reads as selected. */
+  .pill a.current {
+    color: var(--ink);
+    background: var(--hover-bg);
   }
 
   .toggle {

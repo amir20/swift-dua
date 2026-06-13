@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "changelog": "node scripts/gen-changelog.mjs",
+    "dev": "node scripts/gen-changelog.mjs && vite dev",
+    "build": "node scripts/gen-changelog.mjs && vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
