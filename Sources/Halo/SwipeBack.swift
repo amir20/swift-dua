@@ -1,15 +1,26 @@
 import AppKit
 import SwiftUI
 
-/// Catches a horizontal two-finger trackpad swipe and fires `onSwipeLeft`, giving
-/// Halo the same "swipe to go back" feel as Finder and Safari. Implemented in
-/// AppKit because SwiftUI has no trackpad-swipe gesture on macOS.
+/// Catches a horizontal two-finger trackpad swipe-left and fires `onSwipeLeft`,
+/// giving Halo the same "swipe to go back" feel as Finder and Safari. Implemented
+/// in AppKit because SwiftUI has no trackpad-swipe gesture on macOS.
 ///
-/// Only horizontal-dominant *trackpad* gestures count — precise deltas with
-/// `|dx| > |dy|` — so ordinary mouse-wheel scrolling and the rail's vertical
-/// scroll pass straight through. The swipe is followed with `NSEvent`'s
-/// `trackSwipeEvent`, which coalesces the whole gesture (including inertial
-/// momentum) into a single -1…1 amount, so one swipe can only fire `back()` once.
+/// We can't catch the swipe with an `NSView.scrollWheel` override: the donut's
+/// `.onContinuousHover` / `.onTapGesture` / `.contextMenu` install SwiftUI host
+/// views *in front* of this one, so scroll events hit them and bubble up the
+/// responder chain — a background sibling never sees them. Instead we watch the
+/// window's scroll stream with a local event monitor, which is independent of
+/// z-order. (We don't gate on the cursor's location: SwiftUI positions hosted
+/// `NSView`s with layer transforms, so `convert(_:from:)` doesn't map the cursor
+/// back to the donut — and a window-wide back-swipe is the behaviour we want.)
+///
+/// Only horizontal-dominant *trackpad* gestures count (precise deltas, and the
+/// net horizontal travel must beat the vertical), so the rail's vertical scroll
+/// and ordinary mouse-wheel scrolling pass straight through. We accumulate
+/// `scrollingDeltaX` across the gesture and fire once — latched until the gesture
+/// ends — when the leftward travel crosses `triggerDistance`. The travel is
+/// normalized via `isDirectionInvertedFromDevice`, so a physical fingers-left
+/// swipe means "back" whether or not the user has natural scrolling enabled.
 struct SwipeBackView: NSViewRepresentable {
     /// Invoked once per leftward swipe that crosses the trigger threshold.
     var onSwipeLeft: @MainActor () -> Void
@@ -24,31 +35,72 @@ struct SwipeBackView: NSViewRepresentable {
         nsView.onSwipeLeft = onSwipeLeft
     }
 
+    static func dismantleNSView(_ nsView: SwipeCatcher, coordinator: ()) {
+        nsView.stopMonitoring()
+    }
+
     final class SwipeCatcher: NSView {
         var onSwipeLeft: (@MainActor () -> Void)?
 
-        override func scrollWheel(with event: NSEvent) {
-            // Begin tracking only on the opening frame of a horizontal trackpad
-            // gesture; everything else (vertical scroll, mouse wheel) bubbles up.
-            guard event.phase == .began,
-                event.hasPreciseScrollingDeltas,
-                abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
-            else {
-                super.scrollWheel(with: event)
-                return
-            }
+        /// Net leftward travel (points) that commits the gesture. Deliberate
+        /// swipes accumulate this within the first few frames; small horizontal
+        /// drift while scrolling never gets close.
+        private let triggerDistance: CGFloat = 60
 
-            var fired = false
-            event.trackSwipeEvent(
-                options: .lockDirection,
-                dampenAmountThresholdMin: -1, max: 1
-            ) { [weak self] amount, _, _, _ in
-                // Positive amount = swipe right, negative = swipe left. Fire once
-                // the leftward swipe passes the halfway point. `trackSwipeEvent`
-                // runs its handler synchronously on the main thread.
-                guard !fired, amount < -0.5 else { return }
+        private var monitor: Any?
+        private var travelX: CGFloat = 0
+        private var travelY: CGFloat = 0
+        private var fired = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { stopMonitoring() } else { startMonitoring() }
+        }
+
+        private func startMonitoring() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                self?.handle(event)
+                return event  // never consume — vertical scroll must still work
+            }
+        }
+
+        func stopMonitoring() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+
+        private func handle(_ event: NSEvent) {
+            // Trackpad gestures only, and only those aimed at our own window (so a
+            // swipe over a sheet, say, doesn't navigate the donut behind it).
+            guard event.hasPreciseScrollingDeltas, event.window === window else { return }
+
+            switch event.phase {
+            case .began:
+                travelX = 0
+                travelY = 0
+                fired = false
+            case .changed:
+                travelX += event.scrollingDeltaX
+                travelY += event.scrollingDeltaY
+                // Normalize to physical finger direction so the gesture is
+                // independent of the user's natural-scrolling setting.
+                // `scrollingDeltaX` is the content delta — the OS flips it when
+                // natural scrolling is on — so undo that flip to recover raw
+                // device motion, where a fingers-left swipe reads positive.
+                // Require horizontal dominance so vertical/diagonal scrolls never
+                // trip it.
+                let physical = event.isDirectionInvertedFromDevice ? -travelX : travelX
+                guard !fired,
+                    physical >= triggerDistance,
+                    abs(travelX) > abs(travelY)
+                else { return }
                 fired = true
-                MainActor.assumeIsolated { self?.onSwipeLeft?() }
+                MainActor.assumeIsolated { onSwipeLeft?() }
+            case .ended, .cancelled:
+                fired = false
+            default:
+                break
             }
         }
     }
