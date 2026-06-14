@@ -631,7 +631,14 @@ final class ScanModel {
     /// There is no confirmation — like Finder's own move-to-Trash, the Trash *is*
     /// the undo. A node already inside the Trash can't be moved to the Trash, so
     /// it's removed permanently instead (mirrors `performReclaim`).
+    ///
+    /// Refuses to run mid-scan: the prune matches `node` by identity, and a
+    /// still-streaming rebuild can replace that identity before the background
+    /// delete returns, turning the in-place prune into a full rescan. The context
+    /// menu already disables the destructive items while `scanning`, so this is a
+    /// belt-and-suspenders guard on the same invariant.
     func trash(_ node: DirNode) {
+        guard !scanning else { return }
         let url = absoluteURL(for: node)
         let id = ObjectIdentifier(node)
         let permanent = node.category == .trash
