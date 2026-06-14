@@ -42,6 +42,10 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Two-finger swipe left over the donut goes back to the enclosing folder,
+        // mirroring the chevron-left back button (⌘↑). Lives behind the donut so
+        // the slices keep their hover/tap handling.
+        .background(SwipeBackView { model.back() })
     }
 }
 
