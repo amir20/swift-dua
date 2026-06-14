@@ -519,6 +519,13 @@ final class ScanModel {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: currentURL.path)
     }
 
+    /// Reveals a specific node in Finder, selected/highlighted in its parent
+    /// window — the expected "Reveal in Finder" behavior, as opposed to
+    /// `openInFinder` which opens a folder *showing its contents*.
+    func revealInFinder(_ node: DirNode) {
+        NSWorkspace.shared.activateFileViewerSelecting([absoluteURL(for: node)])
+    }
+
     // MARK: - Full Disk Access
 
     /// Re-probe Full Disk Access — called when the app reactivates, e.g. after
@@ -616,6 +623,42 @@ final class ScanModel {
                 deleted: deleteResult.removed.count,
                 failed: trashResult.failed.count + deleteResult.failed.count)
             await MainActor.run { self.applyReclaimResult(trashedIDs: ids, outcome: outcome) }
+        }
+    }
+
+    /// Move a single folder to the Trash directly from a context menu, then prune
+    /// it out of the local tree (the same in-place path a reviewed reclaim takes).
+    /// There is no confirmation — like Finder's own move-to-Trash, the Trash *is*
+    /// the undo. A node already inside the Trash can't be moved to the Trash, so
+    /// it's removed permanently instead (mirrors `performReclaim`).
+    ///
+    /// Refuses to run mid-scan: the prune matches `node` by identity, and a
+    /// still-streaming rebuild can replace that identity before the background
+    /// delete returns, turning the in-place prune into a full rescan. The context
+    /// menu already disables the destructive items while `scanning`, so this is a
+    /// belt-and-suspenders guard on the same invariant.
+    func trash(_ node: DirNode) {
+        guard !scanning else { return }
+        let url = absoluteURL(for: node)
+        let id = ObjectIdentifier(node)
+        let permanent = node.category == .trash
+        Task.detached(priority: .userInitiated) {
+            let outcome: ReclaimOutcome
+            let gone: Bool
+            if permanent {
+                let r = Reclaimer.delete([url])
+                gone = !r.removed.isEmpty
+                outcome = ReclaimOutcome(
+                    trashed: 0, deleted: r.removed.count, failed: r.failed.count)
+            } else {
+                let r = Reclaimer.moveToTrash([url])
+                gone = !r.trashed.isEmpty
+                outcome = ReclaimOutcome(
+                    trashed: r.trashed.count, deleted: 0, failed: r.failed.count)
+            }
+            await MainActor.run {
+                self.applyReclaimResult(trashedIDs: gone ? [id] : [], outcome: outcome)
+            }
         }
     }
 

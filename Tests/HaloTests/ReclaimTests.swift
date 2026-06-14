@@ -265,4 +265,34 @@ final class ReclaimerTests: XCTestCase {
             try? fm.removeItem(at: trash.appendingPathComponent(name))
         }
     }
+
+    /// A whole directory — with nested subdirs and files — is moved to the Trash
+    /// in one shot, not just emptied. This is what the context-menu "Move to
+    /// Trash" relies on. (Cleans up after itself.)
+    func testRealDirectoryIsMovedToTrash() throws {
+        let fm = FileManager.default
+        let name = "halo-reclaim-dir-\(UUID().uuidString)"
+        let dir = fm.temporaryDirectory.appendingPathComponent(name)
+        let nested = dir.appendingPathComponent("sub/deep")
+        try fm.createDirectory(at: nested, withIntermediateDirectories: true)
+        let inner = nested.appendingPathComponent("payload.bin")
+        try Data(count: 2_048).write(to: inner)
+        XCTAssertTrue(fm.fileExists(atPath: inner.path))
+
+        let result = Reclaimer.moveToTrash([dir])
+
+        XCTAssertEqual(result.trashed, [dir])
+        XCTAssertTrue(result.failed.isEmpty)
+        XCTAssertFalse(
+            fm.fileExists(atPath: dir.path), "the directory must be gone from its origin")
+        XCTAssertFalse(
+            fm.fileExists(atPath: inner.path), "nested contents must move with it")
+
+        if let trash = try? fm.url(
+            for: .trashDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: false)
+        {
+            try? fm.removeItem(at: trash.appendingPathComponent(name))
+        }
+    }
 }

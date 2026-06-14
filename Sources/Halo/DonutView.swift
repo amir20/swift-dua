@@ -51,6 +51,15 @@ struct DonutView: View {
                 model.tapSegment(seg)
             }
         }
+        // Right-click menu. Slices are `allowsHitTesting(false)` (hover/tap are
+        // resolved by angle here), so the menu lives on the container and reads
+        // the live hover to pick the arc under the cursor — same trick as the tap
+        // above. No hovered arc (hole or a gap) yields no items, so no menu shows.
+        .contextMenu {
+            if let h = model.hover, let seg = model.segments.first(where: { $0.id == h }) {
+                segmentMenuItems(for: seg.node, in: model)
+            }
+        }
         .animation(.easeOut(duration: 0.18), value: model.hover)
         .animation(.easeOut(duration: 0.18), value: model.expanded)
         .onChange(of: model.sweepKey) { _, _ in restartSweep() }

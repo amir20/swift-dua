@@ -66,41 +66,44 @@ struct RailView: View {
     private func row(_ seg: Segment) -> some View {
         let on = model.hover == seg.id || (model.mode == .type && model.expanded == seg.category)
         let isExp = model.mode == .type && model.expanded == seg.category
-        return HStack(spacing: 11) {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(seg.color)
-                .frame(width: 11, height: 11)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(seg.label)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                Text(seg.isType ? "across this folder" : seg.category.label)
-                    .font(.system(size: 11))
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 11) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(seg.color)
+                    .frame(width: 11, height: 11)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(seg.label)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                    Text(seg.isType ? "across this folder" : seg.category.label)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.ink4)
+                }
+                Spacer(minLength: 6)
+                if seg.recl > 0 {
+                    Text("\(formatSize(seg.recl)) free")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(Palette.reclaim)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Palette.reclaim.opacity(0.12)))
+                }
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(formatSize(seg.size))
+                        .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Palette.ink)
+                    Text("\(percent(seg.size, of: model.total).clean)%")
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(Palette.ink4)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Palette.ink4)
+                    .rotationEffect(.degrees(isExp ? 90 : 0))
+                    .opacity((seg.drillable || seg.isType) ? (on ? 1 : 0) : 0)
+                    .frame(width: 8)
             }
-            Spacer(minLength: 6)
-            if seg.recl > 0 {
-                Text("\(formatSize(seg.recl)) free")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(Palette.reclaim)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(Palette.reclaim.opacity(0.12)))
-            }
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(formatSize(seg.size))
-                    .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Palette.ink)
-                Text("\(percent(seg.size, of: model.total).clean)%")
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(Palette.ink4)
-            }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(Palette.ink4)
-                .rotationEffect(.degrees(isExp ? 90 : 0))
-                .opacity((seg.drillable || seg.isType) ? (on ? 1 : 0) : 0)
-                .frame(width: 8)
+            proportionBar(fraction: fraction(seg.size), color: seg.color)
         }
         .padding(.horizontal, 10).padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 9).fill(on ? Palette.bg : .clear))
@@ -110,6 +113,30 @@ struct RailView: View {
             if inside { model.hover = seg.id } else if model.hover == seg.id { model.hover = nil }
         }
         .onTapGesture { model.tapSegment(seg) }
+        .contextMenu { segmentMenuItems(for: seg.node, in: model) }
+    }
+
+    /// A thin proportional bar along the bottom of a row: width = the item's share
+    /// of the scope total, in the item's color, over a faint full-width track.
+    /// Reinforces the size ranking and makes the long tail — mere slivers in the
+    /// donut — legible in the list.
+    private func proportionBar(fraction: Double, color: Color) -> some View {
+        Capsule()
+            .fill(Palette.line2)
+            .frame(height: 3)
+            .overlay(alignment: .leading) {
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(color)
+                        .frame(width: max(2, geo.size.width * fraction))
+                }
+            }
+    }
+
+    /// An item's share of the current scope total, clamped to 0...1. `model.total`
+    /// is floored at 1, so the division is always safe.
+    private func fraction(_ size: Int64) -> Double {
+        min(max(Double(size) / Double(model.total), 0), 1)
     }
 
     private func locations(for seg: Segment) -> some View {
@@ -119,27 +146,31 @@ struct RailView: View {
         return VStack(spacing: 7) {
             ForEach(locs.indices, id: \.self) { i in
                 let loc = locs[i]
-                HStack(spacing: 9) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(seg.color)
-                        .frame(width: 6, height: 6)
-                    Text(model.fullPath(loc.node))
-                        .font(.system(size: 11.5, design: .monospaced))
-                        .foregroundStyle(Palette.ink3)
-                        .lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 6)
-                    if loc.recl > 0 {
-                        Text("\(formatSize(loc.recl)) free")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Palette.reclaim)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 9) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(seg.color)
+                            .frame(width: 6, height: 6)
+                        Text(model.fullPath(loc.node))
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .foregroundStyle(Palette.ink3)
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 6)
+                        if loc.recl > 0 {
+                            Text("\(formatSize(loc.recl)) free")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Palette.reclaim)
+                        }
+                        Text(formatSize(loc.size))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Palette.ink)
                     }
-                    Text(formatSize(loc.size))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Palette.ink)
+                    proportionBar(fraction: fraction(loc.size), color: seg.color)
                 }
                 .padding(.horizontal, 6).padding(.vertical, 3)
                 .contentShape(Rectangle())
                 .onTapGesture { model.jump(to: loc.node) }
+                .contextMenu { segmentMenuItems(for: loc.node, in: model) }
             }
         }
         .padding(.leading, 24).padding(.trailing, 12).padding(.vertical, 4)
