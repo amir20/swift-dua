@@ -1,0 +1,115 @@
+[
+  {
+    "version": "0.1.5",
+    "tag": "v0.1.5",
+    "date": "2026-06-13",
+    "changes": [
+      {
+        "kind": "added",
+        "text": "On-device folder overview via Foundation Models",
+        "pr": 28
+      },
+      {
+        "kind": "fixed",
+        "text": "Permanently delete trash targets instead of trashing them",
+        "pr": 27
+      }
+    ]
+  },
+  {
+    "version": "0.1.4",
+    "tag": "v0.1.4",
+    "date": "2026-06-12",
+    "changes": [
+      {
+        "kind": "added",
+        "text": "Determinate scan progress with a Dock-icon bar",
+        "pr": 26
+      },
+      {
+        "kind": "added",
+        "text": "Full Disk Access onboarding banner",
+        "pr": 25
+      },
+      {
+        "kind": "fixed",
+        "text": "Make entire Reclaim button clickable, not just its label text"
+      }
+    ]
+  },
+  {
+    "version": "0.1.2",
+    "tag": "v0.1.2",
+    "date": "2026-06-11",
+    "changes": [
+      {
+        "kind": "added",
+        "text": "Sparkle auto-update"
+      }
+    ]
+  },
+  {
+    "version": "0.1.1",
+    "tag": "v0.1.1",
+    "date": "2026-06-11",
+    "changes": [
+      {
+        "kind": "improved",
+        "text": "Always restitch the root when a streaming scan finishes",
+        "pr": 20
+      },
+      {
+        "kind": "fixed",
+        "text": "Reclaim plan lists children when scoped inside a reclaim root",
+        "pr": 19
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
+    "tag": "v0.1.0",
+    "date": "2026-06-10",
+    "changes": [
+      {
+        "kind": "added",
+        "text": "Developer ID signing, notarization, and signed release CI",
+        "pr": 18
+      },
+      {
+        "kind": "added",
+        "text": "Reclaim safe targets to the Trash with a confirmation dialog",
+        "pr": 12
+      },
+      {
+        "kind": "added",
+        "text": "Open in Finder, fix leaf-folder navigation, surface container caches",
+        "pr": 9
+      },
+      {
+        "kind": "added",
+        "text": "Evidence-based reclaimability detection",
+        "pr": 6
+      },
+      {
+        "kind": "added",
+        "text": "Scanning activity ring, per-folder colors, and dark mode",
+        "pr": 5
+      },
+      {
+        "kind": "added",
+        "text": "Halo — faster scans, correct donut hover, app icon, and a real name",
+        "pr": 4
+      },
+      {
+        "kind": "added",
+        "text": "Disk · Dial — SwiftUI donut disk visualizer on a shared DiskKit",
+        "pr": 2
+      },
+      {
+        "kind": "fixed",
+        "text": "Recognize reclaimable scope inside a root; fix breadcrumb nav",
+        "pr": 15
+      }
+    ]
+  }
+]

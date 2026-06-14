@@ -32,6 +32,7 @@
       <p class="made">
         Made by <a href="https://github.com/amir20" target="_blank" rel="noopener">Amir Raminfar</a>
         · <a href="https://github.com/amir20/Halo.app" target="_blank" rel="noopener">Source on GitHub</a>
+        · <a href="/changelog">Changelog</a>
       </p>
       <p class="copy">© {new Date().getFullYear()} halodisk.app</p>
     </div>
